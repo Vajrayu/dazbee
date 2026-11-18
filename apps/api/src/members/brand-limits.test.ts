@@ -111,6 +111,23 @@ describe('an invite with brands', () => {
     expect(WorkspaceMember.parse(editor.json).brandIds).toBeNull()
   })
 
+  it('makes a limited member with no brands when every brand of the invite is gone before it is accepted', async () => {
+    const { person, signIn } = newPerson()
+    const late = await addBrand()
+    const sent = await call('a', 'POST', '/invites', { email: person.user.email, role: 'editor', brandIds: [late.id] })
+    expect(sent.status).toBe(201)
+    await db.delete(brands).where(and(eq(brands.id, late.id), eq(brands.workspaceId, workspace.id)))
+
+    const invitation = workos.made.invitations.find((i) => i.email === person.user.email)
+    workos.accept(invitation?.id ?? '', person.user.id)
+    const { token } = await signIn()
+    expect(await withToken(token, 'GET', '/brands')).toEqual({ status: 200, json: [] })
+    const member = WorkspaceMember.array()
+      .parse((await call('a', 'GET', '/members')).json)
+      .find((m) => m.email === person.user.email)
+    expect(member).toMatchObject({ role: 'editor', brandIds: [] })
+  })
+
   it('resends a pending invite with the new brands', async () => {
     const { person } = newPerson()
     await call('a', 'POST', '/invites', { email: person.user.email, role: 'editor', brandIds: [brand.id] })
