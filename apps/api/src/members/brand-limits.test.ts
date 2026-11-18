@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { and, eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 
-import { brands } from '@dazbee/db'
+import { brands, memberships } from '@dazbee/db'
 import { BrandSummary, DesignSummary, Invite, SignedIn, TemplateSummary, WorkspaceMember } from '@dazbee/schema'
 
 import { addPerson, app, brand, call, db, otherBrand, request, run, sibling, workos, workspace } from '../test-api.ts'
@@ -281,4 +281,19 @@ describe('a limited member', () => {
       expect((await call(editor.as, 'DELETE', ofOwn)).status).toBe(204)
     },
   )
+})
+
+describe('the memberships table', () => {
+  it('refuses a limit on any role but Editor or Reviewer', async () => {
+    const admin = await addPerson([[workspace.id, 'admin']])
+    const ofAdmin = and(eq(memberships.workspaceId, workspace.id), eq(memberships.userId, admin.id))
+    const refused = { cause: { constraint: 'memberships_limited_role' } }
+    await expect(db.update(memberships).set({ limited: true }).where(ofAdmin)).rejects.toMatchObject(refused)
+    await expect(addPerson([[workspace.id, 'owner', [brand.id]]])).rejects.toMatchObject(refused)
+    // An Editor may be limited.
+    const editor = await addPerson([[workspace.id, 'editor']])
+    const ofEditor = and(eq(memberships.workspaceId, workspace.id), eq(memberships.userId, editor.id))
+    await db.update(memberships).set({ limited: true }).where(ofEditor)
+    expect(await brandIdsOf(editor.as)).toEqual([])
+  })
 })

@@ -41,13 +41,13 @@ export async function changeMember(db: Db, actor: Actor, userId: string, { role,
     if (target === 'owner') throw new MemberRefusal(403, 'The Owner’s role is changed only by handing over Owner')
     const next = role ?? target
     if (brandIds !== undefined) await checkLimit(tx, actor.workspaceId, next, brandIds)
-    if (role)
+    const limit = brandIds !== undefined ? brandIds : roleLimitable(next) ? undefined : null
+    if (limit !== undefined) await writeLimit(tx, actor.workspaceId, userId, limit, role)
+    else if (role)
       await tx
         .update(memberships)
         .set({ role })
         .where(and(eq(memberships.workspaceId, actor.workspaceId), eq(memberships.userId, userId)))
-    const limit = brandIds !== undefined ? brandIds : roleLimitable(next) ? undefined : null
-    if (limit !== undefined) await writeLimit(tx, actor.workspaceId, userId, limit)
     const [member] = await listMembers(tx, actor.workspaceId, userId)
     if (!member) throw new Error('the changed member is gone')
     return member

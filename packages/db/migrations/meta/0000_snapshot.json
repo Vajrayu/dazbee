@@ -1,5 +1,5 @@
 {
-  "id": "55be6403-f22d-4bc4-a2b6-236b43e8db97",
+  "id": "fb878588-b3aa-457c-ab2f-97ae2b6ace25",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1320,7 +1320,12 @@
       },
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "memberships_limited_role": {
+          "name": "memberships_limited_role",
+          "value": "not \"memberships\".\"limited\" or \"memberships\".\"role\" in ('editor', 'reviewer')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.templates": {

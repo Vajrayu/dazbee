@@ -144,7 +144,8 @@ CREATE TABLE "memberships" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"last_used_at" timestamp with time zone,
 	"limited" boolean DEFAULT false NOT NULL,
-	CONSTRAINT "memberships_workspace_id_user_id_pk" PRIMARY KEY("workspace_id","user_id")
+	CONSTRAINT "memberships_workspace_id_user_id_pk" PRIMARY KEY("workspace_id","user_id"),
+	CONSTRAINT "memberships_limited_role" CHECK (not "memberships"."limited" or "memberships"."role" in ('editor', 'reviewer'))
 );
 --> statement-breakpoint
 CREATE TABLE "templates" (

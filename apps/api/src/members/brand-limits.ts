@@ -29,13 +29,20 @@ export async function checkLimit(db: Db | Tx, workspaceId: string, role: MemberR
 
 /**
  * Sets the brands the member may see: limited to those of `brandIds` that are still the workspace's, or
- * to every brand for null. Run it in the transaction that changes the membership.
+ * to every brand for null; and their `role` when given, in the same write, since the table refuses a limit
+ * on any role but Editor or Reviewer. Run it in the transaction that changes the membership.
  */
-export async function writeLimit(tx: Tx, workspaceId: string, userId: string, brandIds: MemberBrands) {
+export async function writeLimit(
+  tx: Tx,
+  workspaceId: string,
+  userId: string,
+  brandIds: MemberBrands,
+  role?: MemberRole,
+) {
   const ofMember = and(eq(membershipBrands.workspaceId, workspaceId), eq(membershipBrands.userId, userId))
   await tx
     .update(memberships)
-    .set({ limited: brandIds !== null })
+    .set({ limited: brandIds !== null, ...(role && { role }) })
     .where(and(eq(memberships.workspaceId, workspaceId), eq(memberships.userId, userId)))
   await tx.delete(membershipBrands).where(ofMember)
   if (!brandIds?.length) return

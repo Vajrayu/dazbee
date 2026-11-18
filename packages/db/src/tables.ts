@@ -75,6 +75,8 @@ export const memberships = pgTable(
     uniqueIndex('memberships_one_owner')
       .on(t.workspaceId)
       .where(sql`${t.role} = 'owner'`),
+    // Only an Editor or Reviewer is limited to some brands; an Owner or Admin sees every brand.
+    check('memberships_limited_role', sql`not ${t.limited} or ${t.role} in ('editor', 'reviewer')`),
   ],
 )
 
