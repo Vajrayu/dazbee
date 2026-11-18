@@ -24,7 +24,7 @@ describe('AccountMenu', () => {
       createElement(AccountMenu, { workspaceId: 'workspace-1', name: 'Ada Lovelace', signedIn: true }),
     )
 
-    expect(markup).toContain('<span aria-hidden="true">KC</span>')
+    expect(markup).toContain('<span aria-hidden="true">AL</span>')
   })
 })
 

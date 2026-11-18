@@ -63,7 +63,8 @@ describe('a tab back after a long absence', () => {
     const s = absence(Math.floor(SYNC_LIMITS.catchUpWork / waiting) + 1, waiting)
     expect([s.kind, s.told]).toEqual(['design', 1])
     settle(s, s.a, s.sends)
-  })
+    // Building hundreds of waiting change sets takes about 2.5 s alone and over 5 s on a busy CI runner.
+  }, 20_000)
 })
 
 describe('a tab’s sends at a pace', () => {
