@@ -1,0 +1,26 @@
+# Adds two mirrors of Ubuntu's archive that are not under ubuntu.com to the end of apt's list of
+# mirrors, after the runner's own, and has apt give a stalled download 30 seconds and try it three
+# more times before it gives up. A hosted runner's list holds only names under ubuntu.com; when the
+# runner cannot resolve those, apt goes on to these two. apt checks every package's signature
+# whichever mirror it comes from.
+name: Fallback mirrors for apt
+description: Makes apt fall back to mirrors of Ubuntu's archive outside ubuntu.com after the runner's own, and retry.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        list=/etc/apt/apt-mirrors.txt
+        if [ -f "$list" ]; then
+          awk -F'priority:' '
+            { print; if (NF == 2 && $2 + 0 > last) last = $2 + 0 }
+            END {
+              printf "http://mirrors.edge.kernel.org/ubuntu/\tpriority:%d\n", last + 1
+              printf "http://mirrors.mit.edu/ubuntu/\tpriority:%d\n", last + 2
+            }
+          ' "$list" | sudo tee "$list.new" >/dev/null
+          sudo mv "$list.new" "$list"
+          cat "$list"
+        fi
+        printf '%s\n' 'Acquire::Retries "3";' 'Acquire::http::Timeout "30";' 'Acquire::https::Timeout "30";' |
+          sudo tee /etc/apt/apt.conf.d/80-retries >/dev/null

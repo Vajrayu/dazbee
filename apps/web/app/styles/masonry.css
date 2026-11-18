@@ -1,0 +1,66 @@
+/*
+ * The designs masonry (components/library/design-masonry.tsx). Each tile is placed in code
+ * (lib/masonry.ts), in the column that ends highest so far, so rows fill left to right and the
+ * columns use the full width. A tile carries its place for every column count; the screen's width
+ * picks the count, and a column's width turns the place into a position. The frame around the list
+ * is the size container, so a column's width is a share of the list's own width. Every property is
+ * prefixed, as a tile's contents inherit them alongside the app's own tokens.
+ */
+.masonry-frame {
+  container-type: inline-size;
+}
+.masonry {
+  --masonry-gap: 1rem;
+  /* A tile's caption row: the gap between picture and caption, the caption's two lines (1.25rem and
+     1rem tall, design-masonry.tsx), the gap under the tile. */
+  --masonry-pad: 0.5rem;
+  --masonry-caption: 2.25rem;
+  --masonry-row: calc(var(--masonry-pad) + var(--masonry-caption) + var(--masonry-gap));
+  --masonry-cols: 2;
+  --masonry-h: var(--masonry-h2);
+  --masonry-w: calc((100cqw - (var(--masonry-cols) - 1) * var(--masonry-gap)) / var(--masonry-cols));
+  position: relative;
+  height: calc(var(--masonry-h) - var(--masonry-gap));
+}
+.masonry > li {
+  --masonry-c: var(--masonry-c2);
+  --masonry-a: var(--masonry-a2);
+  --masonry-n: var(--masonry-n2);
+  position: absolute;
+  inset-inline-start: calc(var(--masonry-c) * (var(--masonry-w) + var(--masonry-gap)));
+  top: calc(var(--masonry-a) * var(--masonry-w) + var(--masonry-n) * var(--masonry-row));
+  width: var(--masonry-w);
+}
+@media (width >= 48rem) {
+  .masonry {
+    --masonry-cols: 3;
+    --masonry-h: var(--masonry-h3);
+  }
+  .masonry > li {
+    --masonry-c: var(--masonry-c3);
+    --masonry-a: var(--masonry-a3);
+    --masonry-n: var(--masonry-n3);
+  }
+}
+@media (width >= 80rem) {
+  .masonry {
+    --masonry-cols: 4;
+    --masonry-h: var(--masonry-h4);
+  }
+  .masonry > li {
+    --masonry-c: var(--masonry-c4);
+    --masonry-a: var(--masonry-a4);
+    --masonry-n: var(--masonry-n4);
+  }
+}
+@media (width >= 96rem) {
+  .masonry {
+    --masonry-cols: 5;
+    --masonry-h: var(--masonry-h5);
+  }
+  .masonry > li {
+    --masonry-c: var(--masonry-c5);
+    --masonry-a: var(--masonry-a5);
+    --masonry-n: var(--masonry-n5);
+  }
+}

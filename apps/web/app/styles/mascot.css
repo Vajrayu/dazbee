@@ -1,0 +1,65 @@
+/*
+ * Daz, Dazbee's bee (components/ui/mascot.tsx), and the bee over a design while it opens
+ * (components/editor/opening-bee.tsx). The bee bobs 5 px up and down every 2.4 s, and holds still
+ * under reduced motion. Over an opening design it flies off up and to the end side in 300 ms while
+ * the backdrop and the words fade, so the editor fades in under it; under reduced motion it all
+ * fades out instead.
+ */
+@keyframes mascot-bob {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -5px;
+  }
+}
+.mascot-bob {
+  animation: mascot-bob 2.4s ease-in-out infinite;
+}
+
+@keyframes opening-fade {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes opening-fly {
+  to {
+    translate: 45vw -60vh;
+    rotate: 18deg;
+    scale: 0.7;
+  }
+}
+@keyframes opening-fly-rtl {
+  to {
+    translate: -45vw -60vh;
+    rotate: -18deg;
+    scale: 0.7;
+  }
+}
+.opening-bee[data-phase='leaving'] {
+  pointer-events: none;
+}
+.opening-bee[data-phase='leaving'] .opening-bee-fades {
+  animation: opening-fade 300ms var(--ease-out) forwards;
+}
+.opening-bee[data-phase='leaving'] .opening-bee-flies {
+  animation: opening-fly 300ms cubic-bezier(0.5, 0, 0.75, 0) forwards;
+}
+[dir='rtl'] .opening-bee[data-phase='leaving'] .opening-bee-flies {
+  animation-name: opening-fly-rtl;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mascot-bob {
+    animation: none;
+  }
+  /* A fade isn't motion: it keeps its 300 ms over the base rule that cuts every animation short. */
+  .opening-bee[data-phase='leaving'] {
+    animation: opening-fade 300ms linear forwards;
+    animation-duration: 300ms !important;
+  }
+  .opening-bee[data-phase='leaving'] :is(.opening-bee-fades, .opening-bee-flies) {
+    animation: none;
+  }
+}

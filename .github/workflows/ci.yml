@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  # A branch's commits are tested by its pull request; pushes are tested on main only, so no commit runs twice.
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/ubuntu-archive
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        # The repository is private: CanvasKit's release files come through the API with this token.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      # hb-shape, the reference the shaping checks (#7) compare Skia's glyphs against.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libharfbuzz-bin
+      - run: pnpm lint
+      - run: pnpm typecheck
+      # Postgres, the API and the sync server, from this checkout: the API's seam tests (#33) and the
+      # sync server's run against them, and the API runs the migrations on start.
+      - run: docker compose up -d --wait
+      - run: pnpm test
+      # An upload of reports gets three minutes.
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        timeout-minutes: 3
+        with:
+          name: pixel-diffs
+          path: tests/pixels/output
+          if-no-files-found: ignore
+          retention-days: 7

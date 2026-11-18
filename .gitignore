@@ -1,0 +1,18 @@
+node_modules/
+.next/
+dist/
+.turbo/
+coverage/
+*.tsbuildinfo
+.env*
+!.env.example
+.vercel
+next-env.d.ts
+tests/pixels/output/
+apps/web/public/vendor/
+
+# Other projects' source, cloned for reading.
+/reference/
+
+# try-it's logs and screenshots.
+/.try-it/

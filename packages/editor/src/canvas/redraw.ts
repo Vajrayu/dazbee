@@ -1,0 +1,110 @@
+// The redraw pass: all a redraw does but put the pictures on the screen and build the overlay's
+// elements. It brings the design as last drawn up to date, lets the selection and typing go of what
+// is gone, records the pictures of the frames in view and of what a drag carries, checks the hover,
+// tells that what is shown changed, reports what it did and has the page told of layers left out.
+// In a browser the stage's surface runs it on an animation frame, with the paint that shows the
+// pictures; with no paint it runs to its end.
+import type { Design } from '@dazbee/schema'
+
+import type { DrawInfo } from '../core-interface.ts'
+import { imageUses } from '../display-copies.ts'
+import type { EditorPointer } from '../gestures/pointer.ts'
+import { carried } from '../gestures/select/transform-drag.ts'
+import { listenerSet } from '../listener-set.ts'
+import type { EditorResources } from '../resources.ts'
+import type { EditorSelection } from '../selection.ts'
+import type { EditorTyping } from '../text/typing.ts'
+import type { FramePicture } from './frames.ts'
+import type { FrameScenes } from './scenes.ts'
+import type { EditorView } from './view.ts'
+
+/**
+ * Puts the pictures of the frames in view on the screen, then `ghost`, what a drag carries, faintly
+ * where it is past its frame's edge. False, having drawn nothing, when there is nothing to draw on.
+ */
+export type Paint = (pictures: readonly FramePicture[], ghost: FramePicture | null) => boolean
+
+export interface RedrawDeps {
+  view: Pick<EditorView, 'update' | 'design' | 'previewed' | 'frames' | 'findInView' | 'inView' | 'camera' | 'dpr'>
+  resources: Pick<EditorResources, 'screen' | 'show'>
+  scenes: Pick<FrameScenes, 'shownScene' | 'pictures' | 'ghost' | 'outlinePaths'>
+  selection: Pick<EditorSelection, 'keep' | 'tellListeners'>
+  typing: Pick<EditorTyping, 'stopWhenGone'>
+  pointer: Pick<EditorPointer, 'gesture' | 'rehover'>
+  /** Tells the page, once, how many layers the open design leaves out. */
+  leftOut: { tell(): void }
+  /** Tells the draw listeners of a redraw: the design it drew, when, and what it did. */
+  report: (design: Design, at: number, info: DrawInfo) => void
+}
+
+export interface EditorRedraw {
+  /**
+   * Runs the redraw pass, handing the pictures to `paint` when there is one. Returns what it did,
+   * which the draw listeners hear too; null, the pass stopped there, when `paint` answered false.
+   */
+  redraw(paint?: Paint): DrawInfo | null
+  /**
+   * Tells that what is shown changed: the `onShown` listeners first, which build what they show,
+   * then the selection's listeners. A redraw calls it, and so does every module that changes what
+   * is shown outside one.
+   */
+  shownChanged(): void
+  /** Calls back whenever what is shown changed, before the selection's listeners are told. */
+  onShown(listener: () => void): () => boolean
+}
+
+export function editorRedraw({
+  view,
+  resources,
+  scenes,
+  selection,
+  typing,
+  pointer,
+  leftOut,
+  report,
+}: RedrawDeps): EditorRedraw {
+  /** Told when what is shown changed. */
+  const shown = listenerSet<[]>()
+
+  function redraw(paint?: Paint): DrawInfo | null {
+    const started = performance.now()
+    view.update()
+    selection.keep()
+    typing.stopWhenGone()
+    const design = view.design()
+    const inView = view.findInView()
+    // The images of the page, hidden ones too while they show, and the size they are shown at, which their display copies follow.
+    resources.show(imageUses(view.frames().map(scenes.shownScene)), view.camera().zoom * view.dpr())
+    // The resources of what the pictures show: a layer another tab previews can bring an image or a font.
+    const screen = resources.screen(
+      view.previewed(),
+      view.frames().map((frame) => frame.id),
+    )
+    // What a drag carries, drawn faintly past its frame's edge. It is recorded before the frames'
+    // pictures: recording it checks its frame's scene, and a scene made again lets go of the
+    // picture the frame had.
+    const drag = carried(pointer.gesture())
+    const ghost = drag && { frame: drag.frame, picture: scenes.ghost(drag.frame, drag.roots, screen) }
+    const made = scenes.pictures(view.frames(), inView, screen)
+    if (paint && !paint(made.pictures, ghost)) return null
+    pointer.rehover()
+    const outlinedBefore = scenes.outlinePaths()
+    shownChanged()
+    const info = {
+      outlined: scenes.outlinePaths() - outlinedBefore,
+      ms: performance.now() - started,
+      drawn: view.inView().length,
+      frames: view.frames().length,
+      recorded: made.recorded,
+    }
+    report(design, performance.timeOrigin + performance.now(), info)
+    leftOut.tell()
+    return info
+  }
+  function shownChanged() {
+    shown.emit()
+    selection.tellListeners()
+  }
+
+  return { redraw, shownChanged, onShown: shown.on }
+}

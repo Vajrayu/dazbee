@@ -1,0 +1,89 @@
+import { byCodeUnits, type Design, type Layer } from '@dazbee/schema'
+
+import { boundsOf, type Box } from './geometry.ts'
+
+/** The ids of the layers directly under a frame or layer, back to front. */
+export type ChildIndex = (parentId: string) => readonly string[]
+
+/** Child indexes by a design's `nodes` object. A design's layers are never changed in place, so an index stays right. */
+const indexes = new WeakMap<object, ChildIndex>()
+
+/** Ties in index break by id, the same on every device. */
+export const siblingOrder = (nodes: Readonly<Record<string, Layer>> | ReadonlyMap<string, Layer>) => {
+  const get = (id: string) => (nodes instanceof Map ? nodes.get(id) : (nodes as Record<string, Layer>)[id])
+  return (a: string, b: string) => byCodeUnits(get(a)?.index ?? '', get(b)?.index ?? '') || byCodeUnits(a, b)
+}
+
+/** Every parent's children, sorted, from a set of layers. */
+export function buildChildIndex(nodes: ReadonlyMap<string, Layer>): Map<string, string[]> {
+  const index = new Map<string, string[]>()
+  for (const [id, node] of nodes) {
+    const list = index.get(node.parentId)
+    if (list) list.push(id)
+    else index.set(node.parentId, [id])
+  }
+  const order = siblingOrder(nodes)
+  for (const list of index.values()) list.sort(order)
+  return index
+}
+
+/** Lets a design that keeps its own index (the live design view) hand it out instead of having one built. */
+export function registerChildIndex(nodes: object, index: ChildIndex) {
+  indexes.set(nodes, index)
+}
+
+/** The layers directly under a frame or layer, back to front. Ties in index break by id, the same on every device. */
+export function childrenOf(design: Design, parentId: string): [string, Layer][] {
+  let index = indexes.get(design.nodes)
+  if (!index) {
+    const built = buildChildIndex(new Map(Object.entries(design.nodes)))
+    index = (id) => built.get(id) ?? []
+    indexes.set(design.nodes, index)
+  }
+  return index(parentId).map((id) => [id, design.nodes[id] as Layer])
+}
+
+/** The layers directly under a frame or layer as the layers panel lists them, topmost first, which Tab steps through. */
+export function rowsOf(design: Design, parentId: string): [string, Layer][] {
+  return childrenOf(design, parentId).reverse()
+}
+
+/** Every layer under a frame or layer, parents before children. */
+export function descendants(design: Design, parentId: string): string[] {
+  return childrenOf(design, parentId).flatMap(([id]) => [id, ...descendants(design, id)])
+}
+
+/** The layers a layer sits in, its own parent first, up to its frame. */
+export const ancestorsOf = (design: Design, parentId: string): string[] => {
+  const out: string[] = []
+  for (let up: string | undefined = parentId; up && design.nodes[up]; up = design.nodes[up]?.parentId) out.push(up)
+  return out
+}
+
+/** Whether a layer fits its layers: a group or a boolean, which has no size of its own. */
+export const fitsItsLayers = (layer: { type: string } | undefined) =>
+  layer?.type === 'group' || layer?.type === 'boolean'
+
+/**
+ * The box a group or a boolean fits its layers in: the unturned one around the layers it holds, each
+ * as `boxOf` has it, leaving out those in `without` and any `boxOf` has none for; null when no
+ * other is left.
+ */
+export function fitOf(
+  design: Design,
+  id: string,
+  boxOf: (id: string) => Box | null | undefined,
+  without: readonly string[] = [],
+): Box | null {
+  const boxes = childrenOf(design, id).flatMap(([child]) => (without.includes(child) ? [] : (boxOf(child) ?? [])))
+  return boxes.length > 0 ? boundsOf(boxes) : null
+}
+
+/** Whether layers share one parent, as layers wrapped together in a new group, box or boolean must. */
+export const shareParent = (design: Design, ids: readonly string[]) =>
+  new Set(ids.map((id) => design.nodes[id]?.parentId)).size <= 1
+
+export const isInside = (design: Design, id: string, maybeAncestor: string) => {
+  for (let up: string | undefined = id; up; up = design.nodes[up]?.parentId) if (up === maybeAncestor) return true
+  return false
+}

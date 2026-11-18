@@ -1,0 +1,498 @@
+/*
+ * The app's global styles: the base styles and motion, the AI controls' glow, the overlay scrollbars and strips without one,
+ * the glass and checkerboard utilities, the canvas backdrop, the home's aurora and the open item's blob. The theme tokens, the stage overlay, the sign-in page's showcase, the designs masonry and the bee are
+ * partials in styles/, imported below. CSS takes @import only before every other rule, so they come
+ * first, ahead of the rules in this file.
+ */
+@import 'tailwindcss';
+/* Below the utilities, so a scrolling area keeps the position and overflow its classes give it. */
+@import 'overlayscrollbars/overlayscrollbars.css' layer(components);
+@import './styles/tokens.css';
+@import './styles/stage-overlay.css';
+@import './styles/sign-in.css';
+@import './styles/masonry.css';
+@import './styles/mascot.css';
+
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+/*
+ * Pressed: under a mouse press (:active), or holding the mark a finger or pen press leaves on what it
+ * holds (`data-pressed`, set by lib/press.ts), which phones don't reliably show as :active. As with
+ * :active, an element is pressed while anything inside it is.
+ */
+@custom-variant active (&:is(:active, [data-pressed], :has([data-pressed])));
+/*
+ * Hovered: under a pointer that hovers, as `hover:` is, except inside what holds rows that showed up
+ * under a pointer at rest (`data-hover-held`, set by lib/hover-hold.ts) until the pointer moves there.
+ * Its rules weigh only their class, so the pressed, current, open and greyed looks, each a variant
+ * that weighs more, show over it wherever they come in the stylesheet.
+ */
+@custom-variant hovered {
+  @media (hover: hover) {
+    &:where(:hover:not([data-hover-held] *)) {
+      @slot;
+    }
+  }
+}
+
+/* The rem stays 14 px, so spacing and sizes set in rem keep their size when the text sizes change. */
+html {
+  font-size: 14px;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+
+body {
+  font-size: var(--text-body);
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* In the base layer, so a control's own selection look (a number field's) wins over it. */
+@layer base {
+  ::selection {
+    background: var(--accent-soft);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* Entrances don't run at all, and the sheen isn't there: with a stagger delay, the near-zero
+     duration above would still hold an item hidden for its delay, then show it. */
+  .rise,
+  .pop-in,
+  .pop-in-start,
+  .pop-in-end,
+  .modal-in,
+  .toast-in {
+    animation: none !important;
+  }
+  .ai-sheen {
+    display: none;
+  }
+  /* The AI gradient stands still. */
+  .ai-glow::before,
+  .ai-edge::before {
+    animation: none !important;
+  }
+}
+
+/* The AI gradient in motion, as in the final mock: pink, cobalt, yellow and back to pink at 110deg,
+   each repeat three controls wide, sliding one repeat every 5 s with no seam. It slides as a layer
+   six controls wide (two repeats) moved by transform, so the slide is a compositor transform, never
+   a repaint: a repaint every frame also repainted whatever blurs behind the control, like the home's
+   aurora, which made software-rendered pages (CI) slow to draw. .ai-glow fills AI controls (Make
+   drafts); .ai-edge is the brief composer's gradient edge. The element needs a position. */
+@keyframes ai-slide {
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes ai-slide-rtl {
+  to {
+    transform: translateX(50%);
+  }
+}
+.ai-glow,
+.ai-edge {
+  isolation: isolate;
+  overflow: hidden;
+}
+.ai-glow::before,
+.ai-glow::after,
+.ai-edge::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.ai-glow::before,
+.ai-edge::before {
+  inset-inline-end: auto;
+  width: 600%;
+  background-image: linear-gradient(110deg, var(--ai-1), var(--ai-2), var(--ai-3), var(--ai-1));
+  background-size: 50% 100%;
+  animation: ai-slide 5s linear infinite;
+}
+[dir='rtl'] .ai-glow::before,
+[dir='rtl'] .ai-edge::before {
+  animation-name: ai-slide-rtl;
+}
+/* The riso halftone overprinted on AI controls: a still white dot screen. Plain alpha, not a blend
+   mode: a blend over the sliding layer would be redone on every frame. */
+.ai-glow::after {
+  background-image: radial-gradient(circle, rgb(255 255 255 / 0.3) 22%, transparent 24%);
+  background-size: 0.5vw 0.5vw;
+}
+/* The sheen on AI buttons (Make drafts): a band of light that sweeps across now and then. It is a
+   child span, as both pseudo-elements are taken, and it moves by transform only, for the reason
+   above: no background-position, nothing that repaints what blurs behind the control. */
+@keyframes ai-sheen {
+  0% {
+    transform: translateX(-100%);
+  }
+  45%,
+  100% {
+    transform: translateX(350%);
+  }
+}
+@keyframes ai-sheen-rtl {
+  0% {
+    transform: translateX(100%);
+  }
+  45%,
+  100% {
+    transform: translateX(-350%);
+  }
+}
+.ai-sheen {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  z-index: -1;
+  width: 40%;
+  /* Off the button whenever it isn't sweeping: before the first sweep, or with animation off. */
+  transform: translateX(-100%);
+  pointer-events: none;
+  background-image: linear-gradient(100deg, transparent 20%, rgb(255 255 255 / 0.32) 50%, transparent 80%);
+  animation: ai-sheen 3.6s var(--ease-out) 0.6s infinite backwards;
+}
+[dir='rtl'] .ai-sheen {
+  transform: translateX(100%);
+  animation-name: ai-sheen-rtl;
+}
+
+/*
+ * Overlay scrollbars (components/ui/overlay-scroll.ts): a slim rounded bar over the content, hugging
+ * the area's end edge. Under the pointer, or while dragged, it widens and turns the accent.
+ */
+.os-theme-dazbee {
+  box-sizing: border-box;
+  --os-size: 12px;
+  --os-padding-perpendicular: 2px;
+  --os-padding-axis: 4px;
+  --os-track-border-radius: 99px;
+  --os-handle-border-radius: 99px;
+  --os-handle-bg: color-mix(in oklab, var(--text) 34%, transparent);
+  --os-handle-bg-hover: var(--accent);
+  --os-handle-bg-active: var(--accent);
+  --os-handle-min-size: 28px;
+  --os-handle-perpendicular-size: 62.5%;
+  --os-handle-perpendicular-size-hover: 100%;
+  --os-handle-perpendicular-size-active: 100%;
+  --os-handle-interactive-area-offset: 4px;
+}
+.os-theme-dazbee.os-scrollbar-vertical .os-scrollbar-handle {
+  inset-inline-end: 0;
+}
+.os-theme-dazbee.os-scrollbar-horizontal .os-scrollbar-handle {
+  bottom: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .os-theme-dazbee,
+  .os-theme-dazbee .os-scrollbar-handle {
+    transition: none;
+  }
+}
+
+/*
+ * Glass: the one frosted surface, for chrome that floats over the canvas or a page (dock, zoom,
+ * islands, flyouts, cards, menus, dialogs). Glass is defined here and nowhere else: a surface that
+ * should look frosted takes this utility, and a variant is a token or a modifier on it, never a
+ * second copy. It is a see-through fill over a blur. Muted, faint, accent and red text on it take
+ * their glass shades, which read whatever the ad behind it shows. Inside it, hover and pressed are
+ * see-through tints (`bg-hover`, `bg-pressed`), so what lies behind shows through a lit row too; a
+ * control with a fill of its own takes them laid over it (`tint-hover`, `tint-pressed`).
+ * Its backdrop filter sees only what is painted inside its nearest ancestor with a mask, filter,
+ * opacity below 1, clip-path, blend mode or backdrop filter, so glass over the canvas has no such
+ * ancestor.
+ * A dialog that is glass dims and softens the page behind it.
+ */
+@utility surface-frost {
+  --text-muted: var(--glass-muted);
+  --text-subtle: var(--glass-muted);
+  --accent-text: var(--glass-accent-text);
+  --danger: var(--glass-danger);
+  --hover: var(--glass-hover);
+  --pressed: var(--glass-pressed);
+  /* Its fields sit in it as wells, with no line, so what lies behind shows through them. */
+  --field: var(--glass-well);
+  --field-line: transparent;
+  /* A value a field selects lies on glass, on a fill or not, over any ad, so it shows solid in the
+     glass's accent, 3:1 against them all. */
+  --accent-selected: var(--glass-accent-text);
+  --accent-selected-strong: var(--glass-accent-text);
+  --text-selected: var(--text-selected-glass);
+  --text-selected-strong: var(--text-selected-glass);
+  border: 1px solid var(--glass-line);
+  background-color: var(--glass);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(26px) saturate(1.2);
+  &::backdrop {
+    background: var(--glass-backdrop, rgb(0 0 0 / 0.4));
+    backdrop-filter: blur(2px);
+  }
+}
+
+/*
+ * A row on glass lit by a tint: under the pointer, pressed, or the current or chosen one. Its muted
+ * and coloured text reads in the text colour, as they fall below 4.5:1 on a tint over a bright ad.
+ * Rows take it with the tint's variant: `hovered:bg-hover hovered:lit`.
+ */
+@utility lit {
+  --text-muted: var(--text);
+  --text-subtle: var(--text);
+  --accent-text: var(--text);
+  --danger: var(--text);
+}
+
+/*
+ * A menu (`data-menu`, a menu's content) showing a row's short menu in its own place, as a phone
+ * does (MenuSub in components/ui/menu.tsx): only that short menu shows, under its back row, and the rest of the menu hides,
+ * however deep in the menu the short menu sits.
+ */
+[data-menu]:has([data-menu-in-place]) :not([data-menu-in-place], [data-menu-in-place] *, :has([data-menu-in-place])) {
+  display: none;
+}
+
+/*
+ * A menu shown as a phone's sheet (`data-menu-sheet`, a menu's content): along the screen's bottom edge,
+ * 7 px in from it and from each side, wherever Radix placed it by its button or right-click.
+ */
+[data-radix-popper-content-wrapper]:has(> [data-menu-sheet]) {
+  transform: none !important;
+  inset: auto 7px 7px !important;
+  min-width: 0 !important;
+}
+
+/*
+ * A menu's row the pointer moved onto has the focus (Radix moves it there) but no keyboard ring,
+ * which the browser may draw for it after a press elsewhere: rows ring only after a key.
+ */
+[data-input='pointer'] [data-radix-menu-content] [role^='menuitem']:focus-visible {
+  outline: none;
+}
+
+/* The hover or pressed tint laid over a control's own fill, which stays: a card's row or boxed button
+   under the pointer or pressed, and a glass button that is open. */
+@utility tint-hover {
+  background-image: linear-gradient(var(--hover), var(--hover));
+}
+@utility tint-pressed {
+  background-image: linear-gradient(var(--pressed), var(--pressed));
+}
+
+@keyframes tooltip-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Lists rise in, a few items at a time; chrome motion stays under 200 ms. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise var(--chrome) var(--ease-out) both;
+}
+
+/* UI motion from the final mock. Entrances fill backwards only: once they end they leave no
+   transform behind, so a card doesn't stay a stacking context that would trap the font list. */
+
+/* Menus and popovers pop in with a slight overshoot, from the corner they hang from (popin). */
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.96);
+  }
+}
+.pop-in,
+.pop-in-start,
+.pop-in-end {
+  transform-origin: var(--radix-popper-transform-origin, top center);
+  animation: pop-in var(--chrome) var(--ease-pop) backwards;
+}
+.pop-in-start {
+  transform-origin: top left;
+}
+[dir='rtl'] .pop-in-start {
+  transform-origin: top right;
+}
+.pop-in-end {
+  transform-origin: top right;
+}
+[dir='rtl'] .pop-in-end {
+  transform-origin: top left;
+}
+
+/* Dialogs rise and settle (modalin): the Share menu's Export and Save as template forms. */
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+}
+.modal-in {
+  transform-origin: top center;
+  animation: modal-in var(--enter) var(--ease-out) backwards;
+}
+
+/* Toasts come up from below with a little bounce (toastin). */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+.toast-in {
+  animation: toast-in var(--enter) var(--ease-pop) backwards;
+}
+
+/* Tiles lift on hover, with a deeper shadow under them (lift); in a .group, hovering the group
+   lifts its .lift child, as a template's picture lifts while its name stays. */
+.lift {
+  transition-property: transform, box-shadow, border-color;
+  transition-duration: var(--chrome);
+  transition-timing-function: var(--ease-out);
+}
+.lift:hover,
+.group:hover > .lift {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 32px -12px rgb(0 0 0 / 0.5);
+}
+@media (prefers-reduced-motion: reduce) {
+  .lift:hover,
+  .group:hover > .lift {
+    transform: none;
+  }
+}
+
+/* The canvas backdrop: a quiet dot grid under the frames. */
+.canvas-dots {
+  background-color: var(--canvas);
+  background-image: radial-gradient(var(--canvas-dot) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* The home's aurora (#84), as in the final mock: a blurred conic blob of the AI colours, 70 wide by
+   34 high (in viewport widths), centred just above the headline, at 45%, turning once in 14 s. The
+   blob is a circle squashed into the ellipse; the circle turns by transform, so it never repaints. */
+@keyframes aurora-turn {
+  to {
+    transform: rotate(1turn);
+  }
+}
+.aurora {
+  position: absolute;
+  inset-inline: 15%;
+  inset-block-start: -28vw;
+  aspect-ratio: 1;
+  scale: 1 0.486;
+  opacity: 0.45;
+  pointer-events: none;
+}
+.aurora::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(var(--ai-1), var(--ai-2), var(--ai-3), var(--ai-1));
+  filter: blur(6vw);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .aurora::before {
+    animation: aurora-turn 14s linear infinite;
+  }
+}
+/* Drawn in software, each turn of the blurred blob is a full redraw, so it holds still where it is (#144). */
+[data-render='software'] .aurora::before {
+  animation-play-state: paused;
+}
+/* For the same reason the AI controls' sliding gradient and sheen hold still in software: each of
+   their frames redraws the page under them, the open Recent or Templates sheet included. */
+[data-render='software'] :is(.ai-glow, .ai-edge)::before,
+[data-render='software'] .ai-sheen {
+  animation-play-state: paused;
+}
+
+/* The pill under the editor's open flyout's button and the library's capsule's lit item: a soft blob whose
+   outline drifts slowly while it turns. It animates border-radius and rotate, which leave its
+   transform to the spring that squishes it on arrival. Without motion it is a plain circle. */
+@keyframes blob-gentle {
+  0%,
+  100% {
+    border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%;
+  }
+  25% {
+    border-radius: 56% 44% 53% 47% / 46% 55% 45% 54%;
+  }
+  50% {
+    border-radius: 46% 54% 44% 56% / 55% 46% 54% 45%;
+  }
+  75% {
+    border-radius: 54% 46% 57% 43% / 48% 53% 47% 52%;
+  }
+}
+@keyframes blob-turn {
+  to {
+    rotate: 1turn;
+  }
+}
+.blob {
+  border-radius: 50%;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .blob {
+    animation:
+      blob-gentle 9s ease-in-out infinite,
+      blob-turn 24s linear infinite;
+  }
+}
+/* Drawn in software, each frame of the drifting outline redraws the glass behind it, so it holds still too. */
+[data-render='software'] .blob {
+  animation-play-state: paused;
+}
+
+/* While a phone picks a colour, the edit panel's sheet and the pop-ups over the stage are
+   hidden, never unmounted, so the stage under them can be picked from; they show again after. Their
+   scroll bars, which show themselves while they can scroll, are hidden with them. */
+[data-picking-colour] :is(#edit-panel, [data-radix-popper-content-wrapper]),
+[data-picking-colour] :is(#edit-panel, [data-radix-popper-content-wrapper]) .os-scrollbar {
+  visibility: hidden;
+}
+
+/* A see-through paint's swatch shows over a checkerboard, as design tools draw one. */
+@utility checker {
+  background: repeating-conic-gradient(color-mix(in srgb, var(--text) 14%, transparent) 0 25%, transparent 0 50%) 0 0 /
+    8px 8px;
+}

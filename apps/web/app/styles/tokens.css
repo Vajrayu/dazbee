@@ -1,0 +1,261 @@
+/*
+ * Dazbee's design tokens: Riso Pop colours, glass surfaces, dark by default.
+ * Themes change only these variables, through html[data-theme]: a script in the layout sets it
+ * from the person's pick or the system before first paint, and dark is the default. Components use the semantic names, never raw colours.
+ * tokens.test.ts checks every text token against the surfaces it sits on at 4.5:1 or more, and text
+ * on glass, and on the tints laid on glass, over a white, a black and two bright ads.
+ */
+/* Riso Pop: warm ink, bee yellow and cobalt, after risograph print. */
+:root,
+[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #15121a;
+  --surface: #1b1621;
+  --raised: #201a27;
+  --hover: #2a2333;
+  --pressed: #342b3f;
+  --line: #382f42;
+  --line-strong: #4e4359;
+  /* A field: solid on a page; on glass the frost makes it a well (globals.css, surface-frost). */
+  --field: var(--surface);
+  --field-line: var(--line);
+  /* A swatch's hairline ring, 3:1 against dark glass over any ad, so a dark colour shows on it. */
+  --swatch-ring: #ada4b5;
+  --canvas: #100d14;
+  --canvas-dot: #2e2638;
+  --text: #f8f2fb;
+  --text-muted: #bfb2ca;
+  --text-subtle: #a99bb5;
+  --accent: #ffd23f;
+  --accent-text: #ffd23f;
+  --accent-solid: #ffd23f;
+  --accent-solid-hover: #f2c200;
+  --on-accent: #15121a;
+  --accent-soft: rgb(255 210 63 / 0.16);
+  /* A value selected in a number field: the accent, see-through, 3:1 against the field with the
+     text at 4.5:1 on it. */
+  --accent-selected: rgb(255 210 63 / 0.44);
+  /* The same, stronger, on a number input's fill or on glass, so it stays 3:1 against them; its
+     digits in white, as the text colour can't be 4.5:1 on a tint that far from the fill. */
+  --accent-selected-strong: rgb(255 210 63 / 0.85);
+  --text-selected-strong: #15121a;
+  /* The digits on a value selected on glass, which is the glass's yellow. */
+  --text-selected-glass: #15121a;
+  /* The digits on a selected value, as a field's own selection draws them. */
+  --text-selected: var(--text);
+  --accent-2: #3d6bff;
+  /* What the editor draws over the canvas, apart from the yellow chrome so it reads on yellow
+     designs: the selection, its handles and labels in cobalt with white words on its solid; guides,
+     snap lines and equal gaps in coral, white text on it, so a guide never looks like the selection. */
+  --stage-accent: #5b8cff;
+  --stage-accent-text: #8fb0ff;
+  --stage-accent-solid: #3563f0;
+  --on-stage-accent: #ffffff;
+  --stage-accent-soft: rgb(91 140 255 / 0.16);
+  --guide: #d63a17;
+  --danger: #ff5a5f;
+  /* The solid red of a button that confirms a delete, under white words. */
+  --danger-solid: #c42020;
+  --danger-solid-hover: #a51b1b;
+  /* The words on the red button. */
+  --on-danger: #ffffff;
+  --success: #3dd68c;
+  --warning: #f5b83d;
+  --ring: #ffe27a;
+  /* A faint light along a surface's top, then its lift: one step up, a soft shadow close under it. */
+  --shadow: 0 1px 0 rgb(255 255 255 / 0.05) inset, 0 1px 2px rgb(0 0 0 / 0.4), 0 2px 8px -2px rgb(0 0 0 / 0.35);
+  /* Glass: a dark violet at 73% over what lies behind, the clearest fill on which muted text, a
+     visible step (1.5:1) from text, still reads over a white ad: text at 6.7:1, muted at 4.5:1. A
+     tint rather than a brightness() in the backdrop filter, which would cost a pass on every frame. */
+  --glass: rgb(26 21 32 / 0.73);
+  /* Muted and faint text on glass. */
+  --glass-muted: #d1c7d8;
+  --glass-line: rgb(255 255 255 / 0.1);
+  /* Hover and pressed on glass: see-through white over the glass. */
+  --glass-hover: rgb(255 255 255 / 0.07);
+  --glass-pressed: rgb(255 255 255 / 0.11);
+  /* The sunken track of a segmented choice or a progress bar on glass, the muted text in it, and the
+     chip under the chosen segment. */
+  --glass-well: rgb(0 0 0 / 0.25);
+  --glass-well-muted: #d1c7d8;
+  --glass-chip: rgb(255 255 255 / 0.1);
+  /* Yellow and red text on glass: pale enough to read over a white ad at 4.5:1. */
+  --glass-accent-text: #ffe9a6;
+  --glass-danger: #ffb8ba;
+  /* What a glass dialog lays over the page behind it. */
+  --glass-backdrop: rgb(0 0 0 / 0.4);
+  --ai-3: #ffd23f;
+}
+
+[data-theme='light'] {
+  color-scheme: light;
+  --bg: #fbf7f2;
+  --surface: #ffffff;
+  --raised: #ffffff;
+  --hover: #f3ede6;
+  --pressed: #eae2da;
+  --line: #e7dfe6;
+  --line-strong: #cfc4cf;
+  --field: var(--surface);
+  --field-line: var(--line);
+  --swatch-ring: #cfc4cf;
+  --canvas: #f1ece5;
+  --canvas-dot: #d9d0c8;
+  --text: #1a1420;
+  --text-muted: #574c61;
+  --text-subtle: #6b6075;
+  --accent: #e0a400;
+  --accent-text: #8a5a00;
+  --accent-solid: #ffd23f;
+  --accent-solid-hover: #f5c400;
+  --on-accent: #1a1420;
+  --accent-soft: rgb(255 196 0 / 0.2);
+  --accent-selected: rgb(184 125 0 / 0.95);
+  --accent-selected-strong: rgb(184 125 0 / 1);
+  --text-selected-strong: #1a1420;
+  /* The digits on a value selected on glass, which is the glass's amber. */
+  --text-selected-glass: #ffffff;
+  /* The digits on a selected value, as a field's own selection draws them. */
+  --text-selected: var(--text);
+  --accent-2: #2f55e0;
+  --stage-accent: #2f5be0;
+  --stage-accent-text: #2448c4;
+  --stage-accent-solid: #2f5be0;
+  --on-stage-accent: #ffffff;
+  --stage-accent-soft: rgb(47 91 224 / 0.1);
+  --guide: #d63a17;
+  --danger: #c42020;
+  /* The solid red of a button that confirms a delete, under white words. */
+  --danger-solid: #c42020;
+  --danger-solid-hover: #a51b1b;
+  --on-danger: #ffffff;
+  --success: #0f7246;
+  --warning: #8a5a00;
+  --ring: #c98a00;
+  /* A surface's lift: one step up, a soft shadow close under it. */
+  --shadow: 0 1px 2px rgb(60 30 60 / 0.08), 0 2px 8px -2px rgb(60 30 60 / 0.1);
+  /* Glass: white at 60% over what lies behind. */
+  --glass: rgb(255 255 255 / 0.6);
+  /* Muted and faint text on glass: dark enough to read over a black ad at 4.5:1 (text at 6.3:1), a
+     visible step (1.4:1) from text. */
+  --glass-muted: #362e3e;
+  /* A white edge, as frosted glass catches the light. */
+  --glass-line: rgb(255 255 255 / 0.5);
+  /* Hover and pressed on glass: see-through ink over the glass. */
+  --glass-hover: rgb(26 20 32 / 0.05);
+  --glass-pressed: rgb(26 20 32 / 0.08);
+  /* The sunken track of a segmented choice or a progress bar on glass; the muted text in it, darker
+     than on bare glass to read over a black ad; and the chip under the chosen segment. */
+  --glass-well: rgb(26 20 32 / 0.06);
+  --glass-well-muted: #2e2735;
+  --glass-chip: rgb(255 255 255 / 0.8);
+  /* Amber and red text on glass: dark enough to read over a black ad at 4.5:1. */
+  --glass-accent-text: #3d2900;
+  --glass-danger: #641010;
+  /* What a glass dialog lays over the page behind it: a light dim, so the dialog reads as white glass
+     as a menu does. */
+  --glass-backdrop: rgb(26 20 32 / 0.1);
+  --ai-3: #ffc21a;
+}
+
+/* The AI gradient, pink → cobalt → yellow; it never touches the canvas. */
+:root {
+  --ai-1: #ff48b0;
+  --ai-2: #3d6bff;
+  --ai-gradient: linear-gradient(115deg, var(--ai-1), var(--ai-2) 55%, var(--ai-3));
+  --row: 32px;
+  --radius: 8px;
+  --radius-card: 12px;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --chrome-fast: 120ms;
+  --chrome: 180ms;
+  /* On a phone, how far up from the stage's bottom what opens above the tab bar rests: the tool tray, a flyout, Pages. */
+  --above-tab-bar: 5rem;
+  /* Off a phone, how far up from the stage's bottom what rests above the tool dock starts: a flyout's
+     end, and on a tablet the zoom pill and Pages. */
+  --above-dock: 4.75rem;
+  /* On a tablet, how far up what rests above the zoom pill and Pages starts: the edit panel's sheet, the version bar and a
+     flyout's end. Below 1280 px the edit panel's side card also ends there, clear of Pages over the zoom pill. */
+  --above-corner: 8.25rem;
+  /* Entrances (menus, cards, toasts): a little longer than chrome, still under 260 ms. */
+  --enter: 220ms;
+  /* The final mock's pop: a slight overshoot as a menu or a toast lands. */
+  --ease-pop: cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-hover: var(--hover);
+  --color-pressed: var(--pressed);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-field: var(--field);
+  --color-field-line: var(--field-line);
+  --color-swatch-ring: var(--swatch-ring);
+  --color-canvas: var(--canvas);
+  --color-text: var(--text);
+  --color-muted: var(--text-muted);
+  --color-subtle: var(--text-subtle);
+  --color-accent: var(--accent);
+  --color-accent-text: var(--accent-text);
+  --color-accent-solid: var(--accent-solid);
+  --color-accent-solid-hover: var(--accent-solid-hover);
+  --color-on-accent: var(--on-accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-selected: var(--accent-selected);
+  --color-accent-selected-strong: var(--accent-selected-strong);
+  --color-text-selected-strong: var(--text-selected-strong);
+  --color-text-selected: var(--text-selected);
+  --color-accent-2: var(--accent-2);
+  --color-danger: var(--danger);
+  --color-danger-solid: var(--danger-solid);
+  --color-danger-solid-hover: var(--danger-solid-hover);
+  --color-on-danger: var(--on-danger);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-ring: var(--ring);
+  --color-well: var(--glass-well);
+  --color-chip: var(--glass-chip);
+  --font-sans: var(--font-geist), var(--font-noto-arabic), system-ui, sans-serif;
+  --font-display: var(--font-bricolage), var(--font-geist), var(--font-noto-arabic), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --radius-row: var(--radius);
+  --radius-card: var(--radius-card);
+  --shadow-panel: var(--shadow);
+}
+
+/*
+ * The app's text sizes, each by name (`text-label`, `text-title`), so a size changes here for every
+ * place that uses it. A size with no line height keeps the line height of the text around it. Title
+ * and Display grow on wider screens.
+ */
+@theme static {
+  --text-micro: 11px;
+  --text-tiny: 12px;
+  --text-tiny--line-height: 1.3333;
+  --text-caption: 12px;
+  --text-label: 12px;
+  --text-small: 13px;
+  --text-body: 15px;
+  --text-card: 15px;
+  --text-lead: 17px;
+  --text-heading: 22px;
+  --text-heading--line-height: 1.3333;
+  --text-heading-lg: 24px;
+  --text-title: 28px;
+  --text-title--line-height: 1.2;
+  --text-display: 34px;
+  --text-display--line-height: 1.2;
+  /* Bold reads as semibold and extrabold as bold, so headings stay firm without shouting. */
+  --font-weight-bold: 600;
+  --font-weight-extrabold: 700;
+}
+
+@media (width >= 48rem) {
+  :root {
+    --text-title: 32px;
+    --text-display: 44px;
+  }
+}

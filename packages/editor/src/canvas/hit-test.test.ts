@@ -1,0 +1,576 @@
+import { describe, expect, it } from 'vitest'
+
+import type { SceneLayer } from '@dazbee/renderer'
+import type { TextProps } from '@dazbee/schema'
+
+import { hitTest, type Looks } from './hit-test.ts'
+import { CUT_OUT, FAINT, HALF } from './test-images.ts'
+import { boxLayer, layer, photo, rect, RED, shape, text } from './test-layers.ts'
+import { testLooks } from './test-looks.ts'
+
+/** What the hit test reads: the alpha maps of the images above, and text laid out with the shipped fonts. */
+const looks = testLooks({ half: HALF, faint: FAINT, cutout: CUT_OUT })
+/** The same, with no alpha map yet: every image still loading. */
+const loading: Looks = { ...looks, alpha: () => undefined }
+
+const OUTLINE = { paint: RED, width: 2 } as const
+const CLEAR = { type: 'solid', color: '#FF000000' } as const
+/** A 100 × 100 box at the page's corner. */
+const SQUARE = { x: 0, y: 0, width: 100, height: 100 } as const
+/** A red square at the page's corner with more props set. */
+const faded = (id: string, more: Record<string, unknown> = {}) =>
+  layer(id, 'graphic', { ...SQUARE, shape: { kind: 'rect' }, fills: [RED], ...more })
+/** Layers over a larger square, `under`. */
+const over = (...layers: SceneLayer[]) => [rect('under', 0, 0, 200, 200), ...layers]
+/** The layer under a point, by id. */
+const idAt = (layers: SceneLayer[], x: number, y: number, with_: Looks = looks) => hitTest(layers, { x, y }, with_)?.id
+
+describe('hitTest', () => {
+  it('picks the topmost layer under the point, and nothing over empty page', () => {
+    const layers = [rect('under', 0, 0, 100, 100), rect('over', 50, 50, 100, 100)]
+    expect(idAt(layers, 75, 75)).toBe('over')
+    expect(idAt(layers, 25, 25)).toBe('under')
+    expect(idAt(layers, 400, 400)).toBeUndefined()
+  })
+
+  it('un-rotates the point about the layer centre', () => {
+    // A 200×20 bar turned 90° stands upright about its centre (100, 10).
+    const bar = [rect('bar', 0, 0, 200, 20, 90)]
+    expect(idAt(bar, 100, 80)).toBe('bar')
+    expect(idAt(bar, 180, 10)).toBeUndefined()
+  })
+
+  it('picks an ellipse, a polygon, a star and a rounded rectangle only inside their outlines', () => {
+    const box = { x: 0, y: 0, width: 200, height: 200 }
+    const kinds = {
+      ellipse: { kind: 'ellipse' },
+      polygon: { kind: 'polygon', sides: 6 },
+      star: { kind: 'star', points: 5 },
+      rounded: { kind: 'rect', cornerRadius: 60 },
+      corners: { kind: 'rect', corners: [60, 60, 60, 60] },
+    }
+    for (const [id, kind] of Object.entries(kinds)) {
+      const layers = [rect('under', 0, 0, 200, 200), shape(id, kind, box)]
+      expect(idAt(layers, 100, 100), id).toBe(id)
+      // The box's top-left corner is empty in every one of them.
+      expect(idAt(layers, 8, 8), id).toBe('under')
+    }
+    // Between a star's points, under its box, what is beneath shows.
+    const star = [rect('under', 0, 0, 200, 200), shape('star', kinds.star, box)]
+    expect(idAt(star, 100, 20)).toBe('star')
+    expect(idAt(star, 40, 60)).toBe('under')
+  })
+
+  it('picks a shape with an outline and no fill anywhere inside its outline, and not in its empty corners', () => {
+    const ring = layer('ring', 'graphic', {
+      x: 0,
+      y: 0,
+      width: 200,
+      height: 200,
+      shape: { kind: 'ellipse' },
+      strokes: [OUTLINE],
+    })
+    const layers = [rect('under', 0, 0, 200, 200), ring]
+    expect(idAt(layers, 100, 100)).toBe('ring')
+    expect(idAt(layers, 8, 8)).toBe('under')
+  })
+
+  it("picks a shape's outline stroke where it shows past the outline", () => {
+    const thick = layer('thick', 'graphic', {
+      x: 50,
+      y: 50,
+      width: 100,
+      height: 100,
+      shape: { kind: 'ellipse' },
+      fills: [RED],
+      strokes: [{ paint: RED, width: 20, align: 'outside' }],
+    })
+    const layers = [rect('under', 0, 0, 200, 200), thick]
+    // 10 px outside the ellipse's left edge, on its 20 px outside stroke.
+    expect(idAt(layers, 40, 100)).toBe('thick')
+    expect(idAt(layers, 25, 100)).toBe('under')
+  })
+
+  it("picks a stroke where it shows over a photo's clear part, inside the outline too", () => {
+    const framed = (align: string) => [
+      rect('under', 0, 0, 200, 100),
+      shape(
+        'framed',
+        { kind: 'rect' },
+        { x: 0, y: 0, width: 200, height: 100, strokes: [{ paint: RED, width: 10, align }] },
+        [{ type: 'image', assetId: 'half' }],
+      ),
+    ]
+    // The photo's right half is clear: its inside stroke covers 190–200 there, a centred one 195–200.
+    expect(idAt(framed('inside'), 195, 50)).toBe('framed')
+    expect(idAt(framed('inside'), 180, 50)).toBe('under')
+    expect(idAt(framed('center'), 198, 50)).toBe('framed')
+    expect(idAt(framed('center'), 190, 50)).toBe('under')
+  })
+
+  it('picks a closed path inside its outline, an open one only near its line, and a thin path near it', () => {
+    // A triangle, closed and as an open stroke: the closed one is picked inside it, the open one
+    // along its edges only, and neither in its box's empty corner.
+    const vee = (d: string) =>
+      layer('vee', 'graphic', {
+        x: 0,
+        y: 0,
+        width: 200,
+        height: 200,
+        shape: { kind: 'path', d },
+        strokes: [{ paint: RED, width: 4 }],
+      })
+    const closed = [rect('under', 0, 0, 200, 200), vee('M0 0 L100 200 L200 0 Z')]
+    expect(idAt(closed, 100, 50)).toBe('vee')
+    expect(idAt(closed, 10, 190)).toBe('under')
+    const layers = [rect('under', 0, 0, 200, 200), vee('M0 0 L100 200 L200 0')]
+    expect(idAt(layers, 100, 50)).toBe('under')
+    expect(idAt(layers, 10, 190)).toBe('under')
+    expect(idAt(layers, 50 + 2, 100 - 1)).toBe('vee')
+    // 5 px off its left edge, outside the triangle: half the stroke, 2, and 4 more reach it.
+    expect(idAt(layers, 50 - 5, 100 + 2)).toBe('vee')
+    // A flat path, as thin as a line, is picked a few pixels off it.
+    const flat = layer('flat', 'graphic', {
+      x: 0,
+      y: 100,
+      width: 200,
+      height: 0,
+      shape: { kind: 'path', d: 'M0 0 L200 0' },
+      strokes: [{ paint: RED, width: 2 }],
+    })
+    expect(idAt([rect('under', 0, 0, 200, 200), flat], 100, 104)).toBe('flat')
+    expect(idAt([rect('under', 0, 0, 200, 200), flat], 100, 108)).toBe('under')
+  })
+
+  it('picks a photo only where it is at least 10% opaque', () => {
+    const layers = [rect('under', 0, 0, 400, 400), photo('photo', 'faint', { x: 0, y: 0, width: 200, height: 100 })]
+    expect(idAt(layers, 50, 50)).toBe('under')
+    expect(idAt(layers, 150, 50)).toBe('photo')
+  })
+
+  it("passes through a cut-out photo's clear corners to the layer below", () => {
+    const layers = [rect('under', 0, 0, 600, 400), photo('cutout', 'cutout', { x: 0, y: 0, width: 600, height: 400 })]
+    expect(idAt(layers, 300, 200)).toBe('cutout')
+    expect(idAt(layers, 20, 20)).toBe('under')
+    expect(idAt(layers, 580, 380)).toBe('under')
+  })
+
+  it("applies a photo fill's fit and crop to find its pixel", () => {
+    const under = rect('under', 0, 0, 400, 400)
+    const box = { x: 0, y: 0, width: 100, height: 100 }
+    // Fill covers the box with the image's middle, x 50 to 150: opaque up to x 50 of the box.
+    const fill = [under, photo('p', 'half', box, { fit: 'fill' })]
+    expect(idAt(fill, 40, 50)).toBe('p')
+    expect(idAt(fill, 70, 50)).toBe('under')
+    // Fit puts the whole image in the box's middle band, y 25 to 75, and nothing above or below it.
+    const fit = [under, photo('p', 'half', box, { fit: 'fit' })]
+    expect(idAt(fit, 20, 50)).toBe('p')
+    expect(idAt(fit, 20, 10)).toBe('under')
+    expect(idAt(fit, 70, 50)).toBe('under')
+    // A crop of x 0 to 125 stretched over the box: opaque up to x 80 of the box.
+    const crop = [under, photo('p', 'half', box, { fit: 'crop', crop: { x: 0, y: 0, width: 125, height: 100 } })]
+    expect(idAt(crop, 70, 50)).toBe('p')
+    expect(idAt(crop, 90, 50)).toBe('under')
+    // A crop reaching 100 image pixels above the image: the box's top half shows nothing.
+    const past = [under, photo('p', 'half', box, { fit: 'crop', crop: { x: 0, y: -100, width: 100, height: 200 } })]
+    expect(idAt(past, 20, 30)).toBe('under')
+    expect(idAt(past, 20, 70)).toBe('p')
+    // Tile repeats the image at its size from the box's corner.
+    const tile = [under, photo('p', 'half', { x: 0, y: 0, width: 400, height: 100 }, { fit: 'tile' })]
+    expect(idAt(tile, 250, 50)).toBe('p')
+    expect(idAt(tile, 350, 50)).toBe('under')
+  })
+
+  it('picks a turned photo by its own pixels', () => {
+    // The 200 × 100 half-opaque image turned 180°: its opaque half is now on the right.
+    const layers = [
+      rect('under', 0, 0, 400, 400),
+      photo('p', 'half', { x: 0, y: 0, width: 200, height: 100, rotation: 180 }),
+    ]
+    expect(idAt(layers, 150, 50)).toBe('p')
+    expect(idAt(layers, 50, 50)).toBe('under')
+  })
+
+  it('picks a photo by its outline until its alpha map is there', () => {
+    const layers = [rect('under', 0, 0, 600, 400), photo('cutout', 'cutout', { x: 0, y: 0, width: 600, height: 400 })]
+    expect(idAt(layers, 20, 20, loading)).toBe('cutout')
+  })
+
+  it('picks a shape with a solid fill over a clear photo fill wherever its outline is', () => {
+    const both = shape('both', { kind: 'rect' }, { x: 0, y: 0, width: 600, height: 400 }, [
+      RED,
+      { type: 'image', assetId: 'cutout' },
+    ])
+    expect(idAt([rect('under', 0, 0, 600, 400), both], 20, 20)).toBe('both')
+  })
+
+  it('picks text only on its laid-out lines, not after a short line or below the last', () => {
+    const words = text('words', 'Hi\nHello there', { x: 0, y: 0, width: 600, height: 300 })
+    const layers = [rect('under', 0, 0, 600, 300), words]
+    // "Hi" on the first line, 40 px type: the line is about 54 px tall.
+    expect(idAt(layers, 15, 25)).toBe('words')
+    expect(idAt(layers, 300, 25)).toBe('under')
+    expect(idAt(layers, 150, 80)).toBe('words')
+    expect(idAt(layers, 500, 80)).toBe('under')
+    expect(idAt(layers, 15, 250)).toBe('under')
+  })
+
+  it("follows a text's alignment: centred lines are picked in the middle of the box", () => {
+    const centred = text(
+      'words',
+      'Hi',
+      { x: 0, y: 0, width: 600, height: 300 },
+      { align: 'center', verticalAlign: 'middle' },
+    )
+    const layers = [rect('under', 0, 0, 600, 300), centred]
+    expect(idAt(layers, 300, 150)).toBe('words')
+    expect(idAt(layers, 15, 25)).toBe('under')
+    expect(idAt(layers, 300, 25)).toBe('under')
+  })
+
+  it('picks a text with no words by its box, so it can still be grabbed', () => {
+    const empty = text('empty', '', { x: 0, y: 0, width: 300, height: 100 })
+    expect(idAt([rect('under', 0, 0, 600, 300), empty], 200, 80)).toBe('empty')
+  })
+
+  it('counts the whole box of the layer asked for, as the text being typed in', () => {
+    const words = text('words', 'Hi', { x: 0, y: 0, width: 600, height: 300 })
+    const layers = [rect('under', 0, 0, 600, 300), words]
+    expect(hitTest(layers, { x: 400, y: 250 }, looks, { wholeBox: 'words' })?.id).toBe('words')
+  })
+
+  it("picks a group's child where it shows, and what lies beneath the group between them", () => {
+    const group = layer('g', 'group', { x: 0, y: 0, width: 200, height: 200 }, [
+      shape('dot', { kind: 'ellipse' }, { x: 0, y: 0, width: 200, height: 200 }),
+    ])
+    const layers = [rect('under', 0, 0, 200, 200), group]
+    expect(idAt(layers, 100, 100)).toBe('dot')
+    expect(idAt(layers, 8, 8)).toBe('under')
+    // A wide ellipse turned 90° with its group stands upright: picked at its top, not in its box's corner.
+    const turned = layer('g', 'group', { x: 0, y: 0, width: 200, height: 200, rotation: 90 }, [
+      shape('dot', { kind: 'ellipse' }, { x: 0, y: 50, width: 200, height: 100 }),
+    ])
+    expect(idAt([rect('under', 0, 0, 200, 200), turned], 100, 10)).toBe('dot')
+    expect(idAt([rect('under', 0, 0, 200, 200), turned], 55, 5)).toBe('under')
+  })
+
+  it('picks the child inside a box, the box on its empty part, and hides what a clipping box cuts off', () => {
+    const child = rect('child', 150, 150, 100, 100)
+    expect(idAt([boxLayer('f', true, [child])], 160, 160)).toBe('child')
+    expect(idAt([boxLayer('f', true, [child])], 20, 20)).toBe('f')
+    expect(idAt([boxLayer('f', true, [child])], 240, 240)).toBeUndefined()
+    expect(idAt([boxLayer('f', false, [child])], 240, 240)).toBe('child')
+  })
+
+  it("passes through a box's rounded corners, and a clipping box cuts its children by them", () => {
+    const child = rect('child', 0, 0, 200, 200)
+    const rounded = (clip: boolean) => [rect('under', 0, 0, 200, 200), boxLayer('f', clip, [], { cornerRadius: 80 })]
+    expect(idAt(rounded(true), 100, 100)).toBe('f')
+    expect(idAt(rounded(true), 6, 6)).toBe('under')
+    const clipping = [rect('under', 0, 0, 200, 200), boxLayer('f', true, [child], { cornerRadius: 80 })]
+    expect(idAt(clipping, 100, 100)).toBe('child')
+    expect(idAt(clipping, 6, 6)).toBe('under')
+  })
+
+  it("picks a clipping box's outside stroke, which its clip doesn't cut", () => {
+    const stroked = boxLayer('f', true, [], { strokes: [{ paint: RED, width: 10, align: 'outside' }] })
+    const layers = [rect('under', 0, 0, 300, 300), stroked]
+    expect(idAt(layers, 205, 100)).toBe('f')
+    expect(idAt(layers, 220, 100)).toBe('under')
+  })
+
+  it('picks an ellipse inside a box only inside its outline, and the box around it', () => {
+    const box = boxLayer('f', false, [shape('dot', { kind: 'ellipse' }, { x: 0, y: 0, width: 200, height: 200 })])
+    expect(idAt([box], 100, 100)).toBe('dot')
+    expect(idAt([box], 8, 8)).toBe('f')
+  })
+
+  it('passes over a layer that is not pickable, and everything in it, to what lies beneath', () => {
+    const under = rect('under', 0, 0, 300, 300)
+    const locked = boxLayer('f', true, [rect('child', 150, 150, 100, 100)])
+    const unlocked = (l: { id: string }) => l.id !== 'f'
+    expect(hitTest([under, locked], { x: 160, y: 160 }, looks, { pickable: unlocked })?.id).toBe('under')
+    expect(idAt([under, locked], 160, 160)).toBe('child')
+  })
+
+  it('reads an open path with no fill by its kept band alone, never its outline, and no band of no width round a filled one', () => {
+    const arc = shape(
+      'arc',
+      { kind: 'path', d: 'M0 0 C100 400 300 400 400 0' },
+      { x: 0, y: 0, width: 400, height: 400 },
+      [],
+    )
+    const stroked = layer('arc', 'graphic', { ...arc.props, strokes: [OUTLINE] })
+    const read: string[] = []
+    const counting: Looks = {
+      ...looks,
+      outline: (one) => (read.push('outline'), looks.outline(one)),
+      band: (one, reach) => (read.push(reach > 0 ? 'band' : 'no band'), looks.band(one, reach)),
+    }
+    expect(hitTest([stroked], { x: 200, y: 100 }, counting, {})).toBeNull()
+    expect(hitTest([stroked], { x: 200, y: 299 }, counting, {})?.id).toBe('arc')
+    expect(idAt([shape('tri', { kind: 'path', d: 'M0 0L100 0L50 100Z' }, SQUARE)], 9, 80, counting)).toBeUndefined()
+    expect(read).toEqual(['band', 'band', 'outline', 'band'])
+  })
+
+  it('reaches as many screen pixels at any zoom, so a thin layer is as easy to pick zoomed out', () => {
+    const line = layer('line', 'graphic', {
+      x: 0,
+      y: 50,
+      width: 200,
+      height: 0,
+      shape: { kind: 'line' },
+      strokes: [{ paint: RED, width: 2 }],
+    })
+    const at = (layers: SceneLayer[], x: number, y: number, zoom: number) =>
+      hitTest(layers, { x, y }, looks, { zoom })?.id
+    // Half the stroke, 1, and 4 screen pixels more: 5 at 100%, 17 at 25%.
+    expect(at([line], 100, 55, 1)).toBe('line')
+    expect(at([line], 100, 66, 0.25)).toBe('line')
+    // A rule 1 px tall: 1 screen pixel off it reaches it, 1 design pixel at 100%, 4 at 25%.
+    const rule = rect('rule', 0, 100, 200, 1)
+    expect(at([rule], 100, 99.2, 1)).toBe('rule')
+    expect(at([rule], 100, 98.5, 1)).toBeUndefined()
+    expect(at([rule], 100, 96.2, 0.25)).toBe('rule')
+    expect(at([rule], 100, 95.5, 0.25)).toBeUndefined()
+  })
+
+  it('picks a line near it, however thin its box, and a boolean by the shapes inside it (#44)', () => {
+    const line = layer('line', 'graphic', {
+      x: 0,
+      y: 50,
+      width: 200,
+      height: 0,
+      shape: { kind: 'line' },
+      strokes: [{ paint: RED, width: 6 }],
+    })
+    // Half the stroke, 3, and 4 more either side.
+    expect(idAt([line], 100, 57)).toBe('line')
+    expect(idAt([line], 100, 43)).toBe('line')
+    expect(idAt([line], 100, 58)).toBeUndefined()
+    expect(idAt([line], 201, 50)).toBeUndefined()
+    const combined = layer('b', 'boolean', { x: 0, y: 0, width: 300, height: 100, fills: [RED] }, [
+      rect('a', 0, 0, 100, 100),
+      rect('c', 200, 0, 100, 100),
+    ])
+    expect(idAt([combined], 250, 50)).toBe('c')
+    // Between its shapes, nothing: a boolean has no box of its own to click.
+    expect(idAt([combined], 150, 50)).toBeUndefined()
+  })
+
+  it('picks a boolean by its combined outline: a subtracted hole shows what lies beneath', () => {
+    const ring = layer('b', 'boolean', { x: 0, y: 0, width: 200, height: 200, op: 'subtract', fills: [RED] }, [
+      shape('outer', { kind: 'ellipse' }, { x: 0, y: 0, width: 200, height: 200 }),
+      shape('hole', { kind: 'ellipse' }, { x: 50, y: 50, width: 100, height: 100 }),
+    ])
+    const layers = [rect('under', 0, 0, 200, 200), ring]
+    expect(idAt(layers, 100, 100)).toBe('under')
+    expect(idAt(layers, 100, 25)).toBe('outer')
+    expect(idAt(layers, 8, 8)).toBe('under')
+  })
+
+  it('never picks a mask, and picks what it masks only inside it, up to the next mask', () => {
+    const mask = layer('mask', 'graphic', {
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
+      shape: { kind: 'rect' },
+      mask: 'alpha',
+    })
+    const layers = [
+      rect('under', 0, 0, 300, 300),
+      mask,
+      rect('masked', 50, 50, 100, 100),
+      { ...mask, id: 'next', props: { ...mask.props, x: 200 } } as SceneLayer,
+      rect('after', 120, 120, 30, 30),
+    ]
+    expect(idAt(layers, 75, 75)).toBe('masked')
+    // Outside the mask the masked layer isn't there, nor is the mask: what lies under is picked.
+    expect(idAt(layers, 110, 110)).toBe('under')
+    expect(idAt(layers, 10, 10)).toBe('under')
+    // The next mask starts a run of its own, which the layer after it is in.
+    expect(idAt(layers, 130, 130)).toBe('under')
+    expect(
+      idAt(
+        [rect('under', 0, 0, 300, 300), mask, rect('masked', 50, 50, 100, 100), rect('after', 120, 120, 30, 30)],
+        130,
+        130,
+      ),
+    ).toBe('under')
+  })
+
+  it('picks what an ellipse masks only inside the ellipse, not in its empty corners', () => {
+    const mask = layer('mask', 'graphic', {
+      x: 0,
+      y: 0,
+      width: 200,
+      height: 200,
+      shape: { kind: 'ellipse' },
+      mask: 'alpha',
+    })
+    const layers = [rect('under', 0, 0, 300, 300), mask, rect('masked', 0, 0, 200, 200)]
+    expect(idAt(layers, 100, 100)).toBe('masked')
+    expect(idAt(layers, 8, 8)).toBe('under')
+  })
+
+  it('passes over a layer drawn under 10% opaque, and picks one at 11%', () => {
+    for (const opacity of [0, 0.05, 0.09]) expect(idAt(over(faded('over', { opacity })), 50, 50)).toBe('under')
+    expect(idAt(over(faded('over', { opacity: 0.11 })), 50, 50)).toBe('over')
+  })
+
+  it("passes through a group or a box at opacity 0, and multiplies a group's opacity into its children's", () => {
+    const group = (opacity: number, child = faded('child')) => layer('group', 'group', { ...SQUARE, opacity }, [child])
+    expect(idAt(over(group(0)), 50, 50)).toBe('under')
+    expect(idAt(over(boxLayer('box', false, [faded('child')], { opacity: 0 })), 50, 50)).toBe('under')
+    // 30% of 30% is 9%: under the threshold, though each alone is over it.
+    expect(idAt(over(group(0.3, faded('child', { opacity: 0.3 }))), 50, 50)).toBe('under')
+    expect(idAt(over(group(1)), 50, 50)).toBe('child')
+  })
+
+  it('passes through a shape whose fill is clear, and picks it on a stroke that shows', () => {
+    expect(idAt(over(faded('clear', { fills: [CLEAR] })), 50, 50)).toBe('under')
+    const stroked = (paint: unknown) =>
+      over(faded('stroked', { fills: [CLEAR], strokes: [{ paint, width: 10, align: 'center' }] }))
+    expect(idAt(stroked(RED), 50, 50)).toBe('under')
+    expect(idAt(stroked(RED), 2, 50)).toBe('stroked')
+    expect(idAt(stroked(RED), 103, 50)).toBe('stroked')
+    // A clear stroke shows no more than a clear fill.
+    expect(idAt(stroked(CLEAR), 2, 50)).toBe('under')
+  })
+
+  it('reads a gradient by its stops where the point is: all clear passes, a fade passes at its clear end', () => {
+    const stops = (from: string, to: string) => [
+      { offset: 0, color: from },
+      { offset: 1, color: to },
+    ]
+    const linear = (from: string, to: string) =>
+      over(
+        faded('linear', {
+          fills: [{ type: 'linear', from: { x: 0, y: 0.5 }, to: { x: 1, y: 0.5 }, stops: stops(from, to) }],
+        }),
+      )
+    expect(idAt(linear('#FF000000', '#0000FF00'), 50, 50)).toBe('under')
+    expect(idAt(linear('#FF0000FF', '#FF000000'), 10, 50)).toBe('linear')
+    expect(idAt(linear('#FF0000FF', '#FF000000'), 95, 50)).toBe('under')
+    const radial = over(
+      faded('radial', {
+        fills: [{ type: 'radial', center: { x: 0.5, y: 0.5 }, radius: 0.5, stops: stops('#FF0000FF', '#FF000000') }],
+      }),
+    )
+    expect(idAt(radial, 50, 50)).toBe('radial')
+    expect(idAt(radial, 98, 50)).toBe('under')
+    // In a 2:1 box it is as round as it is drawn: 50 px across, so 48 px out it is clear either way.
+    const wide = over(
+      faded('wide', {
+        width: 200,
+        fills: [{ type: 'radial', center: { x: 0.5, y: 0.5 }, radius: 0.5, stops: stops('#FF0000FF', '#FF000000') }],
+      }),
+    )
+    expect([idAt(wide, 140, 50), idAt(wide, 148, 50), idAt(wide, 100, 2)]).toEqual(['wide', 'under', 'under'])
+  })
+
+  it('passes through text in a clear colour', () => {
+    const style = { fontFamily: 'Noto Sans', fontSize: 40, color: '#00000000' }
+    expect(idAt(over(text('clear', 'Sale', { x: 0, y: 0, width: 400, height: 100 }, { style })), 20, 25)).toBe('under')
+    expect(idAt(over(text('inked', 'Sale', { x: 0, y: 0, width: 400, height: 100 })), 20, 25)).toBe('inked')
+  })
+
+  it('passes through a photo at 5% opacity, on its opaque part too', () => {
+    const layers = over(photo('photo', 'half', { x: 0, y: 0, width: 200, height: 100 }, { opacity: 0.05 }))
+    expect(idAt(layers, 50, 50)).toBe('under')
+    expect(idAt(layers, 50, 50, loading)).toBe('under')
+  })
+
+  it('passes through a layer under a black luminance mask, or an alpha mask at opacity 0', () => {
+    const masked = (mask: 'alpha' | 'luminance', color: string, opacity = 1) =>
+      over(faded('mask', { mask, opacity, fills: [{ type: 'solid', color }] }), faded('masked'))
+    expect(idAt(masked('luminance', '#000000FF'), 50, 50)).toBe('under')
+    expect(idAt(masked('luminance', '#FFFFFFFF'), 50, 50)).toBe('masked')
+    expect(idAt(masked('alpha', '#000000FF', 0), 50, 50)).toBe('under')
+    expect(idAt(masked('alpha', '#00000000'), 50, 50)).toBe('under')
+    expect(idAt(masked('alpha', '#000000FF'), 50, 50)).toBe('masked')
+  })
+
+  it("weighs a group or box used as a luminance mask by its layers' brightness", () => {
+    const black = { fills: [{ type: 'solid', color: '#000000FF' }] }
+    const white = { fills: [{ type: 'solid', color: '#FFFFFFFF' }] }
+    const group = (paint: Record<string, unknown>) =>
+      layer('mask', 'group', { ...SQUARE, mask: 'luminance' }, [faded('a', paint), faded('b', paint)])
+    expect(idAt(over(group(black), faded('masked')), 50, 50)).toBe('under')
+    expect(idAt(over(group(white), faded('masked')), 50, 50)).toBe('masked')
+    const box = (paint: Record<string, unknown>) =>
+      boxLayer('mask', false, [faded('child', paint)], { ...SQUARE, ...black, mask: 'luminance' })
+    expect(idAt(over(box(black), faded('masked')), 50, 50)).toBe('under')
+    expect(idAt(over(box(white), faded('masked')), 50, 50)).toBe('masked')
+  })
+
+  it('picks frosted glass inside its outline, however clear its fill or low its opacity', () => {
+    const glass = { effects: [{ type: 'backgroundBlur', radius: 20 }] }
+    expect(idAt(over(faded('pane', { ...glass, fills: [CLEAR] })), 50, 50)).toBe('pane')
+    expect(idAt(over(faded('pane', { ...glass, opacity: 0 })), 50, 50)).toBe('pane')
+    // Its group's opacity fades the glass with the rest.
+    expect(idAt(over(layer('group', 'group', { ...SQUARE, opacity: 0 }, [faded('pane', glass)])), 50, 50)).toBe('under')
+  })
+
+  it('picks frosted text anywhere in its box, which it frosts whole, not only on its lines', () => {
+    const glass = { effects: [{ type: 'backgroundBlur', radius: 20 }] }
+    const words = text('words', 'Hi', { x: 0, y: 0, width: 600, height: 300 }, glass)
+    const layers = [rect('under', 0, 0, 800, 400), words]
+    expect(idAt(layers, 15, 25)).toBe('words')
+    expect(idAt(layers, 300, 25)).toBe('words')
+    expect(idAt(layers, 15, 250)).toBe('words')
+    expect(idAt(layers, 700, 350)).toBe('under')
+  })
+
+  it('picks a selected layer that shows nothing anywhere in its box, and a visible one only where it shows', () => {
+    const pick = (layers: SceneLayer[], x: number, y: number, selected: string[]) =>
+      hitTest(layers, { x, y }, looks, { selected })?.id
+    const ghost = over(faded('ghost', { shape: { kind: 'ellipse' }, opacity: 0 }))
+    expect(pick(ghost, 50, 50, [])).toBe('under')
+    expect(pick(ghost, 50, 50, ['ghost'])).toBe('ghost')
+    // In its box's empty corner too: nothing on screen tells its outline from its box.
+    expect(pick(ghost, 4, 4, ['ghost'])).toBe('ghost')
+    expect(pick(ghost, 150, 150, ['ghost'])).toBe('under')
+    // A selected layer that shows keeps its see-through parts.
+    expect(pick(over(faded('ellipse', { shape: { kind: 'ellipse' } })), 4, 4, ['ellipse'])).toBe('under')
+    // A child of a group at opacity 0, selected from the layers panel, and the group itself.
+    const group = over(layer('group', 'group', { ...SQUARE, opacity: 0 }, [faded('child')]))
+    expect(pick(group, 50, 50, ['child'])).toBe('child')
+    expect(pick(group, 50, 50, ['group'])).toBe('group')
+    // A group at full opacity whose layers are all at 0 shows nothing either.
+    const emptied = over(layer('group', 'group', SQUARE, [faded('a', { opacity: 0 }), faded('b', { opacity: 0 })]))
+    expect(pick(emptied, 50, 50, ['group'])).toBe('group')
+    expect(pick(emptied, 50, 50, [])).toBe('under')
+  })
+})
+
+describe('lineBoxes', () => {
+  /** The line boxes of a text, from the shipped fonts' layout. */
+  const linesOf = (value: string, more: Record<string, unknown> = {}) =>
+    looks.lines(text('t', value, { x: 0, y: 0, width: 600, height: 300 }, more).props as TextProps)
+
+  it('gives each laid-out line a box as wide as its words, each below the one before', () => {
+    const [short, long] = linesOf('Hi\nHello there')
+    expect(short && long).toBeTruthy()
+    expect(short?.x).toBeCloseTo(0, 0)
+    expect(short?.width).toBeLessThan(long?.width ?? 0)
+    expect(long?.y).toBeGreaterThanOrEqual((short?.y ?? 0) + (short?.height ?? 0) - 1)
+  })
+
+  it("puts a list's bullet where it is drawn: before a left-to-right line, after a right-to-left one", () => {
+    const [bullet, line] = linesOf('One', { list: 'bullet' })
+    expect(bullet?.x).toBeCloseTo(0, 0)
+    expect((bullet?.x ?? 0) + (bullet?.width ?? 0)).toBeLessThan(line?.x ?? 0)
+    const [after, rtl] = linesOf('One', { list: 'bullet', direction: 'rtl' })
+    expect((after?.x ?? 0) + (after?.width ?? 0)).toBeCloseTo(600, 0)
+    expect(after?.x).toBeGreaterThan((rtl?.x ?? 0) + (rtl?.width ?? 0))
+  })
+
+  it('moves the lines by the alignment, and gives a text with no words none', () => {
+    const [centred] = linesOf('Hi', { align: 'center', verticalAlign: 'middle' })
+    expect((centred?.x ?? 0) + (centred?.width ?? 0) / 2).toBeCloseTo(300, 0)
+    expect((centred?.y ?? 0) + (centred?.height ?? 0) / 2).toBeCloseTo(150, 0)
+    expect(linesOf('')).toEqual([])
+  })
+})

@@ -1,0 +1,23 @@
+{
+  "name": "dazbee",
+  "private": true,
+  "packageManager": "pnpm@12.16.1",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "lint": "pnpm format:check && pnpm lint:deps && pnpm lint:no-yjs && turbo run lint",
+    "lint:deps": "dazbee-check-deps",
+    "lint:no-yjs": "dazbee-check-no-yjs",
+    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,mts,cjs,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,mts,cjs,css}\"",
+    "test": "turbo run test && pnpm --filter @dazbee/pixels test:speed"
+  },
+  "devDependencies": {
+    "@dazbee/config": "workspace:*",
+    "prettier": "^3.9.10",
+    "turbo": "^2.11.10"
+  }
+}

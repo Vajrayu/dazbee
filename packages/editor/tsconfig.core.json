@@ -1,0 +1,5 @@
+{
+  "extends": "@dazbee/config/tsconfig.base.json",
+  "compilerOptions": { "types": [], "lib": ["ES2023"] },
+  "files": ["src/core.ts", "src/core-globals.d.ts"]
+}

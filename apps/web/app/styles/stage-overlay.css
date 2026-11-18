@@ -1,0 +1,750 @@
+/* What the editor draws over the canvas, in screen pixels (the stage keeps dir=ltr). */
+/* The overlay draws in the stage's own colours (tokens.css), apart from the yellow chrome. */
+.stage-overlay {
+  --accent: var(--stage-accent);
+  --accent-text: var(--stage-accent-text);
+  --accent-solid: var(--stage-accent-solid);
+  --on-accent: var(--on-stage-accent);
+  --accent-soft: var(--stage-accent-soft);
+}
+.stage-overlay .frame-label {
+  position: absolute;
+  font-family: var(--font-mono);
+  display: flex;
+  /* The size wraps onto a hidden second line when it and the name don't both fit, so it goes before the name is cut. */
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 8px;
+  height: 20px;
+  overflow: hidden;
+  font-size: var(--text-caption);
+  line-height: 20px;
+  white-space: nowrap;
+  color: var(--text-subtle);
+}
+.stage-overlay .frame-label[data-active],
+.stage-overlay .frame-label[data-lit] {
+  color: var(--accent-text);
+}
+.stage-overlay .frame-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.stage-overlay .frame-label[data-active] .frame-name,
+.stage-overlay .frame-label[data-lit] .frame-name {
+  color: inherit;
+}
+.stage-overlay .frame-size {
+  margin-inline-start: auto;
+  font-variant-numeric: tabular-nums;
+}
+/* Selection: the box with its handles, each selected layer's outline, hover and marquee. A layer
+   whose outline is other than its box (data-shape) is outlined by the SVG path inside it: a hovered
+   or selected member layer by the path alone, one selected layer by the path and the 1px box that
+   carries the handles. */
+.stage-overlay .selection,
+.stage-overlay .selection-copy,
+.stage-overlay .selection-member,
+.stage-overlay .entered,
+.stage-overlay .linked-copy,
+.stage-overlay .hidden-layer,
+.stage-overlay .hover {
+  position: absolute;
+  transform-origin: center;
+}
+.stage-overlay .selection {
+  outline: 1px solid var(--accent);
+}
+/* The selected layers of another frame, beside the first one's: outlined as it is, with no handles. */
+.stage-overlay .selection-copy {
+  outline: 1px solid var(--accent);
+}
+.stage-overlay .selection-member {
+  outline: 1px solid var(--accent);
+}
+.stage-overlay .outline-path {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.stage-overlay .outline-path path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1px;
+}
+.stage-overlay .hover .outline-path path {
+  stroke-width: 1.5px;
+}
+/* The frame picked by a press on its label or its empty area: outlined whole. */
+.stage-overlay .frame-picked {
+  position: absolute;
+  outline: 2px solid var(--accent);
+}
+/* A frame lit from outside the stage, as a list's row under the pointer lights it: outlined whole, as a layer under the pointer is. */
+.stage-overlay .frame-lit {
+  position: absolute;
+  opacity: 0.6;
+}
+.stage-overlay .hover,
+.stage-overlay .frame-lit {
+  outline: 1.5px solid var(--accent);
+}
+/* A hovered layer, or one of several selected, whose outline is other than its box shows only its SVG path. */
+.stage-overlay :is(.selection-member, .hover)[data-shape] {
+  outline: none;
+}
+/* The shape an image dragged from the library would go into: lit, and breathing while it waits. */
+.stage-overlay .drop-target {
+  position: absolute;
+  transform-origin: center;
+  outline: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  animation: drop-breathe 1.1s ease-in-out infinite alternate;
+}
+@keyframes drop-breathe {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stage-overlay .drop-target {
+    animation: none;
+  }
+}
+/* The selected layers' linked copies in the page's other frames, so you see where else they are. */
+.stage-overlay .linked-copy {
+  outline: 1.5px dashed var(--accent);
+}
+/* Each hidden layer while hidden layers are shown, faded on the canvas: dashed along its real shape, so it reads as left out of every export. */
+.stage-overlay .hidden-layer {
+  outline: 1px dashed color-mix(in srgb, var(--accent) 70%, transparent);
+}
+.stage-overlay .hidden-layer[data-shape] {
+  outline: none;
+}
+.stage-overlay .hidden-layer .outline-path path {
+  stroke: color-mix(in srgb, var(--accent) 70%, transparent);
+  stroke-dasharray: 4 3;
+}
+/* The group or box double-clicked into, while working inside it. */
+.stage-overlay .entered {
+  outline: 1px dashed var(--accent);
+  opacity: 0.8;
+}
+/* The selection's four corner handles, or a line's two round ends, and the radius dots inside its
+   corners: round, 7px across, 9px under the pointer or dragged. */
+.stage-overlay .handle,
+.stage-overlay .radius-dot {
+  position: absolute;
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  translate: -50% -50%;
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.25);
+}
+.stage-overlay .handle[data-end] {
+  border-radius: 50%;
+}
+.stage-overlay .radius-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.stage-overlay .radius-dot[data-big] {
+  width: 9px;
+  height: 9px;
+}
+/* Cropping an image fill (#48): the window, with white brackets on its corners and bars on its
+   sides that size it; and the whole image, faint where the window doesn't show it, with a round
+   handle on each corner that zooms it. On a phone or by touch the handles are bigger. */
+.stage-overlay .crop-image {
+  position: absolute;
+  transform-origin: center;
+  outline: 1px dashed var(--accent);
+}
+.stage-overlay .crop-ghost {
+  position: absolute;
+  inset: 0;
+  background-size: 100% 100%;
+  opacity: 0.4;
+}
+.stage-overlay .crop-zoom {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  translate: -50% -50%;
+  border: 1.5px solid var(--accent);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.25);
+}
+.stage-overlay .crop-bracket,
+.stage-overlay .crop-bar {
+  --crop-arm: 18px;
+  --crop-bar: 22px;
+  --crop-weight: 4px;
+  position: absolute;
+  filter: drop-shadow(0 0 1px rgb(0 0 0 / 0.55)) drop-shadow(0 1px 2px rgb(0 0 0 / 0.25));
+}
+.stage-overlay .crop-bracket {
+  width: var(--crop-arm);
+  height: var(--crop-arm);
+  border: 0 solid #fff;
+}
+.stage-overlay .crop-bracket[data-crop-window='nw'] {
+  border-block-start-width: var(--crop-weight);
+  border-inline-start-width: var(--crop-weight);
+  border-start-start-radius: 3px;
+  translate: calc(-1 * var(--crop-weight)) calc(-1 * var(--crop-weight));
+}
+.stage-overlay .crop-bracket[data-crop-window='ne'] {
+  border-block-start-width: var(--crop-weight);
+  border-inline-end-width: var(--crop-weight);
+  border-start-end-radius: 3px;
+  translate: calc(var(--crop-weight) - var(--crop-arm)) calc(-1 * var(--crop-weight));
+}
+.stage-overlay .crop-bracket[data-crop-window='se'] {
+  border-block-end-width: var(--crop-weight);
+  border-inline-end-width: var(--crop-weight);
+  border-end-end-radius: 3px;
+  translate: calc(var(--crop-weight) - var(--crop-arm)) calc(var(--crop-weight) - var(--crop-arm));
+}
+.stage-overlay .crop-bracket[data-crop-window='sw'] {
+  border-block-end-width: var(--crop-weight);
+  border-inline-start-width: var(--crop-weight);
+  border-end-start-radius: 3px;
+  translate: calc(-1 * var(--crop-weight)) calc(var(--crop-weight) - var(--crop-arm));
+}
+.stage-overlay .crop-bar {
+  translate: -50% -50%;
+  border-radius: 3px;
+  background: #fff;
+}
+.stage-overlay .crop-bar[data-crop-window='n'],
+.stage-overlay .crop-bar[data-crop-window='s'] {
+  width: var(--crop-bar);
+  height: var(--crop-weight);
+}
+.stage-overlay .crop-bar[data-crop-window='e'],
+.stage-overlay .crop-bar[data-crop-window='w'] {
+  width: var(--crop-weight);
+  height: var(--crop-bar);
+}
+@media (max-width: 640px), (pointer: coarse) {
+  .stage-overlay .crop-zoom {
+    width: 16px;
+    height: 16px;
+  }
+  .stage-overlay .crop-bracket,
+  .stage-overlay .crop-bar {
+    --crop-arm: 22px;
+    --crop-bar: 28px;
+    --crop-weight: 5px;
+  }
+}
+/* Paths (#45): the outline being drawn or edited, its anchors, the handles in play, and the pen's next segment. */
+.stage-overlay .path-edit {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.stage-overlay .path-outline,
+.stage-overlay .pen-preview {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+.stage-overlay .pen-preview {
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+.stage-overlay .path-handle-line {
+  stroke: var(--accent);
+  stroke-width: 1;
+}
+.stage-overlay .path-anchor,
+.stage-overlay .path-control {
+  position: absolute;
+  translate: -50% -50%;
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.25);
+}
+.stage-overlay .path-anchor {
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid var(--accent);
+  border-radius: 50%;
+  background: #fff;
+}
+.stage-overlay .path-anchor[data-selected],
+.stage-overlay .path-anchor[data-closing] {
+  background: var(--accent);
+}
+.stage-overlay .path-anchor[data-closing] {
+  scale: 1.35;
+}
+.stage-overlay .path-control {
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--accent);
+  border-radius: 1.5px;
+  background: #fff;
+  rotate: 45deg;
+}
+/* Snapping: snap lines along the lines a drag lines up with, a cross on each point that lined up, and
+   equal gaps as a line across each with a tick at each end and its size, in the guide's blue. */
+.stage-overlay .snap-line {
+  position: absolute;
+  outline: 0.5px solid var(--guide);
+}
+.stage-overlay .snap-cross {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  translate: -50% -50%;
+  background:
+    linear-gradient(
+      45deg,
+      transparent calc(50% - 0.75px),
+      var(--guide) calc(50% - 0.75px) calc(50% + 0.75px),
+      transparent calc(50% + 0.75px)
+    ),
+    linear-gradient(
+      -45deg,
+      transparent calc(50% - 0.75px),
+      var(--guide) calc(50% - 0.75px) calc(50% + 0.75px),
+      transparent calc(50% + 0.75px)
+    );
+}
+.stage-overlay .gap {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  outline: 0.5px solid var(--guide);
+}
+.stage-overlay .gap::before,
+.stage-overlay .gap::after {
+  content: '';
+  position: absolute;
+  background: var(--guide);
+}
+.stage-overlay .gap[data-axis='x']::before,
+.stage-overlay .gap[data-axis='x']::after {
+  inset-block-start: -3px;
+  width: 1px;
+  height: 7px;
+}
+.stage-overlay .gap[data-axis='x']::before {
+  inset-inline-start: -0.5px;
+}
+.stage-overlay .gap[data-axis='x']::after {
+  inset-inline-end: -0.5px;
+}
+.stage-overlay .gap[data-axis='y']::before,
+.stage-overlay .gap[data-axis='y']::after {
+  inset-inline-start: -3px;
+  width: 7px;
+  height: 1px;
+}
+.stage-overlay .gap[data-axis='y']::before {
+  inset-block-start: -0.5px;
+}
+.stage-overlay .gap[data-axis='y']::after {
+  inset-block-end: -0.5px;
+}
+.stage-overlay .gap-size {
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--guide);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  font-weight: 600;
+  line-height: 14px;
+  font-variant-numeric: tabular-nums;
+}
+/* Measuring with Alt: the box measured to outlined and the distance lines, 1px in the guide's blue,
+   an extension dashed 3 on 2 off, each value in the gap's pill, placed by the editor. */
+.stage-overlay .measure-box {
+  position: absolute;
+  outline: 1px solid var(--guide);
+}
+.stage-overlay .measure-line {
+  position: absolute;
+  background: var(--guide);
+}
+.stage-overlay .measure-line[data-axis='x'] {
+  translate: 0 -0.5px;
+}
+.stage-overlay .measure-line[data-axis='y'] {
+  translate: -0.5px 0;
+}
+.stage-overlay .measure-line[data-axis='x'][data-dashed] {
+  background: repeating-linear-gradient(to right, var(--guide) 0 3px, transparent 3px 5px);
+}
+.stage-overlay .measure-line[data-axis='y'][data-dashed] {
+  background: repeating-linear-gradient(to bottom, var(--guide) 0 3px, transparent 3px 5px);
+}
+/* Constraint lines while Position shows the selected layers' constraints, in the guide's blue: from
+   each side a layer keeps to, to its parent's side, 1px dashed 4 on 3 off, and a short solid bar
+   through a layer kept to the centre, each turned with the containers around the layer. */
+.stage-overlay .constraint-line,
+.stage-overlay .constraint-bar {
+  position: absolute;
+  transform-origin: center;
+}
+.stage-overlay :is(.constraint-line, .constraint-bar)::before {
+  content: '';
+  position: absolute;
+}
+.stage-overlay :is(.constraint-line, .constraint-bar)[data-run='across']::before {
+  inset: -0.5px 0;
+}
+.stage-overlay :is(.constraint-line, .constraint-bar)[data-run='down']::before {
+  inset: 0 -0.5px;
+}
+.stage-overlay .constraint-line[data-run='across']::before {
+  background: repeating-linear-gradient(to right, var(--guide) 0 4px, transparent 4px 7px);
+}
+.stage-overlay .constraint-line[data-run='down']::before {
+  background: repeating-linear-gradient(to bottom, var(--guide) 0 4px, transparent 4px 7px);
+}
+.stage-overlay .constraint-bar::before {
+  background: var(--guide);
+}
+/* The radius beside the pointer while a radius dot is dragged, in the same pill, placed by the editor. */
+.stage-overlay .measure-value,
+.stage-overlay .radius-value {
+  position: absolute;
+  white-space: nowrap;
+}
+/* Safe zones: the bands of a 9:16 frame a platform's interface covers, striped in the danger colour so
+   what lies under them still shows. */
+.stage-overlay .safe-zone {
+  position: absolute;
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--danger) 30%, transparent) 0 6px,
+    color-mix(in srgb, var(--danger) 14%, transparent) 6px 12px
+  );
+}
+/* Guides: a frame's lines dragged out of the rulers, 1px in the guide's blue across their frame, 2px
+   while under the pointer, picked or dragged, with their place in the gap's pill. */
+.stage-overlay .guide-line {
+  position: absolute;
+  background: var(--guide);
+}
+.stage-overlay .guide-line[data-axis='x'] {
+  width: 1px;
+  translate: -0.5px 0;
+}
+.stage-overlay .guide-line[data-axis='y'] {
+  height: 1px;
+  translate: 0 -0.5px;
+}
+.stage-overlay .guide-line[data-axis='x'][data-hot] {
+  width: 2px;
+  translate: -1px 0;
+}
+.stage-overlay .guide-line[data-axis='y'][data-hot] {
+  height: 2px;
+  translate: 0 -1px;
+}
+.stage-overlay .guide-place {
+  position: absolute;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--guide);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  font-weight: 600;
+  line-height: 14px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* Rulers (#42) along the stage's top and start edges, in the selected frame's design pixels: solid
+   strips, not glass, so their small numbers read over any ad. */
+.stage-overlay .ruler,
+.stage-overlay .ruler-corner {
+  position: absolute;
+  overflow: hidden;
+  background-color: var(--surface);
+}
+.stage-overlay .ruler {
+  background-image: linear-gradient(var(--line-strong), var(--line-strong));
+  background-repeat: repeat;
+}
+.stage-overlay .ruler[data-axis='x'] {
+  border-block-end: 1px solid var(--line);
+  background-image: repeating-linear-gradient(to right, var(--line-strong) 0 1px, transparent 1px 100%);
+  background-repeat: repeat-x;
+}
+.stage-overlay .ruler[data-axis='y'] {
+  border-inline-end: 1px solid var(--line);
+  background-image: repeating-linear-gradient(to bottom, var(--line-strong) 0 1px, transparent 1px 100%);
+  background-repeat: repeat-y;
+}
+.stage-overlay .ruler-corner {
+  border-block-end: 1px solid var(--line);
+  border-inline-end: 1px solid var(--line);
+}
+.stage-overlay .ruler-tick,
+.stage-overlay .ruler-end {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--text-subtle);
+}
+.stage-overlay .ruler-end {
+  color: var(--accent-text);
+  font-weight: 600;
+}
+.stage-overlay .ruler[data-axis='x'] .ruler-tick,
+.stage-overlay .ruler[data-axis='x'] .ruler-end {
+  inset-block: 0;
+  padding-block-start: 3px;
+  padding-inline-start: 3px;
+  border-inline-start: 1px solid var(--line-strong);
+}
+.stage-overlay .ruler[data-axis='x'] .ruler-end {
+  translate: -50% 0;
+  border: 0;
+  padding-inline: 2px;
+  background: color-mix(in oklab, var(--surface) 92%, transparent);
+}
+.stage-overlay .ruler[data-axis='y'] .ruler-tick,
+.stage-overlay .ruler[data-axis='y'] .ruler-end {
+  /* Turned to read upwards from its place: the start border becomes the tick across the ruler. */
+  inset-inline-start: 0;
+  height: 20px;
+  line-height: 20px;
+  padding-inline-start: 3px;
+  border-inline-start: 1px solid var(--line-strong);
+  transform-origin: 0 0;
+  rotate: -90deg;
+}
+.stage-overlay .ruler[data-axis='y'] .ruler-end {
+  border: 0;
+  padding-inline-end: 2px;
+  background: color-mix(in oklab, var(--surface) 92%, transparent);
+}
+.stage-overlay .ruler-band {
+  position: absolute;
+  inset: 0;
+  background: var(--accent-soft);
+}
+.stage-overlay .ruler[data-axis='x'] .ruler-band {
+  inset-inline-start: auto;
+  inset-inline-end: auto;
+}
+.stage-overlay .ruler[data-axis='y'] .ruler-band {
+  inset-block-start: auto;
+  inset-block-end: auto;
+}
+.stage-overlay .marquee {
+  position: absolute;
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+}
+/* The frame the Frame tool's drag would add: dashed, as it is not on the page yet. */
+.stage-overlay .marquee[data-frame-draw] {
+  border-style: dashed;
+}
+.stage-overlay .selection-size {
+  position: absolute;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--accent-solid);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.stage-overlay .caret {
+  position: absolute;
+  width: 2px;
+  margin-inline-start: -1px;
+  background: var(--accent);
+  animation: blink 1s steps(1) infinite;
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+/* The selected range inside text being typed into (#47). */
+.stage-overlay .text-selection {
+  position: absolute;
+  background: color-mix(in oklab, var(--accent) 28%, transparent);
+  pointer-events: none;
+}
+
+/* A drag in an auto layout flow: the layers following the pointer, the line where they would go,
+   with a white halo and a faint dark edge so it reads over any colour, and the box outlined when
+   a drop would take them out of it. */
+.stage-overlay .reorder-ghost,
+.stage-overlay .reorder-line,
+.stage-overlay .reorder-leave {
+  position: absolute;
+  transform-origin: center;
+}
+.stage-overlay .reorder-ghost {
+  outline: 1.5px dashed var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.stage-overlay .reorder-line {
+  background: var(--accent);
+  border-radius: 1px;
+  box-shadow:
+    0 0 0 1px #fff,
+    0 0 0 1.5px rgb(0 0 0 / 0.25);
+}
+.stage-overlay .reorder-leave {
+  outline: 1.5px dashed var(--accent);
+  opacity: 0.7;
+}
+
+/* The loupe picking a colour shows: a 110 px circle of design pixels, a cell of at
+   least 10 px each, crisp, over a light checker where the frame is see-through and the canvas off
+   it; the middle cell boxed white then black; a 3 px ring in the colour under it, with a hairline
+   and a shadow so a white or a dark one reads over any ad; under it a glass pill with the hex. */
+.stage-overlay .loupe {
+  position: absolute;
+  pointer-events: none;
+}
+.stage-overlay .loupe-lens {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 50%;
+  background-color: var(--canvas);
+  color: var(--surface);
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.3),
+    0 6px 18px rgb(0 0 0 / 0.28);
+}
+/* The ring, over the cells. */
+.stage-overlay .loupe-lens::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 0 3px currentColor,
+    inset 0 0 0 4px rgb(0 0 0 / 0.25);
+}
+.stage-overlay .loupe-grid {
+  position: absolute;
+}
+/* While the frame is drawn: an empty grid, one line a cell. */
+.stage-overlay .loupe-grid[data-empty] {
+  background-image:
+    linear-gradient(to right, var(--line-strong) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--line-strong) 1px, transparent 1px);
+}
+.stage-overlay .loupe-checker {
+  position: absolute;
+  background: repeating-conic-gradient(#d4d4d4 0 25%, #fff 0 50%) 0 0 / 10px 10px;
+}
+.stage-overlay .loupe-cells {
+  position: absolute;
+  inset: 0;
+  image-rendering: pixelated;
+}
+.stage-overlay .loupe-centre {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid #fff;
+  outline: 1px solid #000;
+}
+.stage-overlay .loupe-hex {
+  @apply surface-frost;
+  position: absolute;
+  top: calc(100% + 6px);
+  inset-inline-start: 50%;
+  translate: -50% 0;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  font-weight: 600;
+  line-height: 22px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* Another person's selected layers and picked frame, in their colour: the element's colour. */
+.stage-overlay .presence-layer,
+.stage-overlay .presence-frame {
+  position: absolute;
+  transform-origin: center;
+}
+.stage-overlay .presence-layer {
+  outline: 1.5px solid currentColor;
+}
+.stage-overlay .presence-layer[data-shape] {
+  outline: none;
+}
+.stage-overlay .presence-layer .outline-path path {
+  stroke: currentColor;
+  stroke-width: 1.5px;
+}
+.stage-overlay .presence-frame {
+  outline: 2px solid currentColor;
+}
+/* Another person's cursor: the dart's tip at their pointer, edged in white, their name in a tag beside it. */
+.stage-overlay .presence-cursor {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+.stage-overlay .presence-dart {
+  position: absolute;
+  inset-inline-start: -1px;
+  top: -1px;
+  width: 18px;
+  height: 18px;
+  overflow: visible;
+}
+.stage-overlay .presence-dart path {
+  fill: currentColor;
+  stroke: #fff;
+  stroke-width: 1.5px;
+  stroke-linejoin: round;
+}
+.stage-overlay .presence-name {
+  position: absolute;
+  inset-inline-start: 12px;
+  top: 16px;
+  max-width: 200px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: var(--text-caption);
+  font-weight: 600;
+  line-height: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stage-overlay .presence-name:empty {
+  display: none;
+}

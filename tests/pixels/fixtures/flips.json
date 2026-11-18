@@ -1,0 +1,1428 @@
+{
+  "meta": {
+    "designId": "fixture-flips",
+    "name": "Flips"
+  },
+  "pages": {
+    "p1": {
+      "name": "Page 1",
+      "order": "a0"
+    }
+  },
+  "frames": {
+    "plain": {
+      "pageId": "p1",
+      "name": "Plain",
+      "width": 720,
+      "height": 720,
+      "x": 0,
+      "y": 0,
+      "fills": [
+        {
+          "type": "solid",
+          "color": "#F4EDE4FF"
+        }
+      ],
+      "order": "a0"
+    },
+    "flipped-x": {
+      "pageId": "p1",
+      "name": "Flipped across",
+      "width": 720,
+      "height": 720,
+      "x": 800,
+      "y": 0,
+      "fills": [
+        {
+          "type": "solid",
+          "color": "#F4EDE4FF"
+        }
+      ],
+      "order": "a1"
+    },
+    "flipped-y": {
+      "pageId": "p1",
+      "name": "Flipped upside down",
+      "width": 720,
+      "height": 720,
+      "x": 1600,
+      "y": 0,
+      "fills": [
+        {
+          "type": "solid",
+          "color": "#F4EDE4FF"
+        }
+      ],
+      "order": "a2"
+    },
+    "shadows": {
+      "pageId": "p1",
+      "name": "Shadows of flipped triangles",
+      "width": 720,
+      "height": 400,
+      "x": 2400,
+      "y": 0,
+      "fills": [
+        {
+          "type": "solid",
+          "color": "#FFFFFFFF"
+        }
+      ],
+      "order": "a3"
+    },
+    "by-hand": {
+      "pageId": "p1",
+      "name": "Shadows of triangles mirrored by hand",
+      "width": 720,
+      "height": 400,
+      "x": 3200,
+      "y": 0,
+      "fills": [
+        {
+          "type": "solid",
+          "color": "#FFFFFFFF"
+        }
+      ],
+      "order": "a4"
+    }
+  },
+  "nodes": {
+    "plain-star": {
+      "type": "graphic",
+      "parentId": "plain",
+      "link": "star",
+      "index": "a0",
+      "name": "Turned star with a glow and a dashed stroke",
+      "props": {
+        "x": 40,
+        "y": 40,
+        "width": 200,
+        "height": 180,
+        "rotation": 20,
+        "shape": {
+          "kind": "star",
+          "points": 5,
+          "innerRadius": 0.45,
+          "cornerRadius": 8
+        },
+        "fills": [
+          {
+            "type": "linear",
+            "from": {
+              "x": 0,
+              "y": 0
+            },
+            "to": {
+              "x": 1,
+              "y": 0.3
+            },
+            "stops": [
+              {
+                "offset": 0.0,
+                "color": "#E0157FFF"
+              },
+              {
+                "offset": 1.0,
+                "color": "#FFD23FFF"
+              }
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "paint": {
+              "type": "solid",
+              "color": "#1F3A5FFF"
+            },
+            "width": 6,
+            "dashes": [24, 8, 4]
+          }
+        ],
+        "effects": [
+          {
+            "type": "glow",
+            "blur": 16,
+            "spread": 2,
+            "color": "#3D6BFF99"
+          }
+        ]
+      }
+    },
+    "plain-photo": {
+      "type": "graphic",
+      "parentId": "plain",
+      "link": "photo",
+      "index": "a1",
+      "name": "Photo cropped off centre, each corner its own",
+      "props": {
+        "x": 300,
+        "y": 40,
+        "width": 220,
+        "height": 160,
+        "shape": {
+          "kind": "rect",
+          "corners": [0, 24, 60, 90]
+        },
+        "fills": [
+          {
+            "type": "image",
+            "assetId": "sneaker",
+            "fit": "crop",
+            "crop": {
+              "x": 500,
+              "y": 450,
+              "width": 1100,
+              "height": 800
+            }
+          }
+        ]
+      }
+    },
+    "plain-hole": {
+      "type": "graphic",
+      "parentId": "plain",
+      "link": "hole",
+      "index": "a2",
+      "name": "Path with a hole and an off-centre radial",
+      "props": {
+        "x": 560,
+        "y": 40,
+        "width": 130,
+        "height": 180,
+        "shape": {
+          "kind": "path",
+          "d": "M0 0 L100 20 L80 100 L10 90 Z M20 20 L60 30 L30 60 Z",
+          "fillRule": "evenodd",
+          "drawnIn": {
+            "width": 100,
+            "height": 100
+          }
+        },
+        "fills": [
+          {
+            "type": "radial",
+            "center": {
+              "x": 0.2,
+              "y": 0.3
+            },
+            "radius": 0.8,
+            "stops": [
+              {
+                "offset": 0.0,
+                "color": "#FFFFFFFF"
+              },
+              {
+                "offset": 1.0,
+                "color": "#0F7246FF"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "plain-arrow": {
+      "type": "graphic",
+      "parentId": "plain",
+      "link": "arrow",
+      "index": "a3",
+      "name": "Turned dashed line, an arrow at its start and a triangle at its end",
+      "props": {
+        "x": 60,
+        "y": 270,
+        "width": 260,
+        "height": 40,
+        "rotation": 12,
+        "shape": {
+          "kind": "line",
+          "start": "arrow",
+          "end": "triangle"
+        },
+        "strokes": [
+          {
+            "paint": {
+              "type": "linear",
+              "from": {
+                "x": 0,
+                "y": 0
+              },
+              "to": {
+                "x": 1,
+                "y": 0
+              },
+              "stops": [
+                {
+                  "offset": 0.0,
+                  "color": "#E0157FFF"
+                },
+                {
+                  "offset": 1.0,
+                  "color": "#1F3A5FFF"
+                }
+              ]
+            },
+            "width": 6,
+            "dashes": [30, 10]
+          }
+        ]
+      }
+    },
+    "plain-card": {
+      "type": "box",
+      "parentId": "plain",
+      "link": "card",
+      "index": "a4",
+      "name": "Clipping box with its own corners, an angular fill and an outside stroke",
+      "props": {
+        "x": 380,
+        "y": 250,
+        "width": 280,
+        "height": 180,
+        "rotation": -8,
+        "cornerRadius": [0, 40, 0, 90],
+        "fills": [
+          {
+            "type": "angular",
+            "center": {
+              "x": 0.3,
+              "y": 0.4
+            },
+            "angle": 30,
+            "stops": [
+              {
+                "offset": 0.0,
+                "color": "#3D6BFFFF"
+              },
+              {
+                "offset": 0.5,
+                "color": "#FFD23FFF"
+              },
+              {
+                "offset": 1.0,
+                "color": "#3D6BFFFF"
+              }
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "paint": {
+              "type": "solid",
+              "color": "#1A1420FF"
+            },
+            "width": 8,
+            "align": "outside"
+          }
+        ]
+      }
+    },
+    "plain-card-dot": {
+      "type": "graphic",
+      "parentId": "plain-card",
+      "link": "card-dot",
+      "index": "a0",
+      "name": "Dot cut by the box's corner",
+      "props": {
+        "x": 560,
+        "y": 220,
+        "width": 140,
+        "height": 120,
+        "shape": {
+          "kind": "polygon",
+          "sides": 3
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#FFFFFFFF"
+          }
+        ]
+      }
+    },
+    "plain-cut": {
+      "type": "boolean",
+      "parentId": "plain",
+      "link": "cut",
+      "index": "a5",
+      "name": "Subtract with a gradient of its own",
+      "props": {
+        "x": 40,
+        "y": 400,
+        "width": 220,
+        "height": 160,
+        "op": "subtract",
+        "fills": [
+          {
+            "type": "linear",
+            "from": {
+              "x": 0,
+              "y": 0
+            },
+            "to": {
+              "x": 1,
+              "y": 1
+            },
+            "stops": [
+              {
+                "offset": 0.0,
+                "color": "#0F7246FF"
+              },
+              {
+                "offset": 1.0,
+                "color": "#FFD23FFF"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "plain-cut-base": {
+      "type": "graphic",
+      "parentId": "plain-cut",
+      "link": "cut-base",
+      "index": "a0",
+      "name": "Base",
+      "props": {
+        "x": 40,
+        "y": 400,
+        "width": 220,
+        "height": 160,
+        "shape": {
+          "kind": "rect",
+          "corners": [60, 0, 0, 20]
+        }
+      }
+    },
+    "plain-cut-bite": {
+      "type": "graphic",
+      "parentId": "plain-cut",
+      "link": "cut-bite",
+      "index": "a1",
+      "name": "Turned bite",
+      "props": {
+        "x": 170,
+        "y": 380,
+        "width": 120,
+        "height": 90,
+        "rotation": 30,
+        "shape": {
+          "kind": "ellipse"
+        }
+      }
+    },
+    "plain-team": {
+      "type": "group",
+      "parentId": "plain",
+      "link": "team",
+      "index": "a6",
+      "name": "Turned group of a turned star",
+      "props": {
+        "x": 300,
+        "y": 470,
+        "width": 160,
+        "height": 120,
+        "rotation": 15
+      }
+    },
+    "plain-team-star": {
+      "type": "graphic",
+      "parentId": "plain-team",
+      "link": "team-star",
+      "index": "a0",
+      "name": "Star in a turned group",
+      "props": {
+        "x": 300,
+        "y": 470,
+        "width": 160,
+        "height": 120,
+        "rotation": 10,
+        "shape": {
+          "kind": "star",
+          "points": 4,
+          "innerRadius": 0.3
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#D81B60FF"
+          }
+        ]
+      }
+    },
+    "plain-spill": {
+      "type": "text",
+      "parentId": "plain",
+      "link": "spill",
+      "index": "a7",
+      "name": "Translucent text whose lines spill out of its fixed box",
+      "props": {
+        "x": 500,
+        "y": 470,
+        "width": 140,
+        "height": 60,
+        "opacity": 0.7,
+        "boxMode": "fixed",
+        "text": "Spills past its box",
+        "style": {
+          "fontFamily": "Noto Sans",
+          "fontSize": 36,
+          "fontWeight": 700,
+          "color": "#263238FF"
+        }
+      }
+    },
+    "flipped-x-star": {
+      "type": "graphic",
+      "parentId": "flipped-x",
+      "link": "star",
+      "index": "a0",
+      "name": "Turned star with a glow and a dashed stroke",
+      "props": {
+        "x": 480,
+        "y": 40,
+        "width": 200,
+        "height": 180,
+        "rotation": -20,
+        "shape": {
+          "kind": "star",
+          "points": 5,
+          "innerRadius": 0.45,
+          "cornerRadius": 8
+        },
+        "fills": [
+          {
+            "type": "linear",
+            "from": {
+              "x": 0,
+              "y": 0
+            },
+            "to": {
+              "x": 1,
+              "y": 0.3
+            },
+            "stops": [
+              {
+                "offset": 0.0,
+                "color": "#E0157FFF"
+              },
+              {
+                "offset": 1.0,
+                "color": "#FFD23FFF"
+              }
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "paint": {
+              "type": "solid",
+              "color": "#1F3A5FFF"
+            },
+            "width": 6,
+            "dashes": [24, 8, 4]
+          }
+        ],
+        "effects": [
+          {
+            "type": "glow",
+            "blur": 16,
+            "spread": 2,
+            "color": "#3D6BFF99"
+          }
+        ],
+        "flipX": true
+      }
+    },
+    "flipped-x-photo": {
+      "type": "graphic",
+      "parentId": "flipped-x",
+      "link": "photo",
+      "index": "a1",
+      "name": "Photo cropped off centre, each corner its own",
+      "props": {
+        "x": 200,
+        "y": 40,
+        "width": 220,
+        "height": 160,
+        "shape": {
+          "kind": "rect",
+          "corners": [0, 24, 60, 90]
+        },
+        "fills": [
+          {
+            "type": "image",
+            "assetId": "sneaker",
+            "fit": "crop",
+            "crop": {
+              "x": 500,
+              "y": 450,
+              "width": 1100,
+              "height": 800
+            }
+          }
+        ],
+        "flipX": true
+      }
+    },
+    "flipped-x-hole": {
+      "type": "graphic",
+      "parentId": "flipped-x",
+      "link": "hole",
+      "index": "a2",
+      "name": "Path with a hole and an off-centre radial",
+      "props": {
+        "x": 30,
+        "y": 40,
+        "width": 130,
+        "height": 180,
+        "shape": {
+          "kind": "path",
+          "d": "M0 0 L100 20 L80 100 L10 90 Z M20 20 L60 30 L30 60 Z",
+          "fillRule": "evenodd",
+          "drawnIn": {
+            "width": 100,
+            "height": 100
+          }
+        },
+        "fills": [
+          {
+            "type": "radial",
+            "center": {
+              "x": 0.2,
+              "y": 0.3
+            },
+            "radius": 0.8,
+            "stops": [
+              {
+                "offset": 0.0,
+                "color": "#FFFFFFFF"
+              },
+              {
+                "offset": 1.0,
+                "color": "#0F7246FF"
+              }
+            ]
+          }
+        ],
+        "flipX": true
+      }
+    },
+    "flipped-x-arrow": {
+      "type": "graphic",
+      "parentId": "flipped-x",
+      "link": "arrow",
+      "index": "a3",
+      "name": "Turned dashed line, an arrow at its start and a triangle at its end",
+      "props": {
+        "x": 400,
+        "y": 270,
+        "width": 260,
+        "height": 40,
+        "rotation": -12,
+        "shape": {
+          "kind": "line",
+          "start": "arrow",
+          "end": "triangle"
+        },
+        "strokes": [
+          {
+            "paint": {
+              "type": "linear",
+              "from": {
+                "x": 0,
+                "y": 0
+              },
+              "to": {
+                "x": 1,
+                "y": 0
+              },
+              "stops": [
+                {
+                  "offset": 0.0,
+                  "color": "#E0157FFF"
+                },
+                {
+                  "offset": 1.0,
+                  "color": "#1F3A5FFF"
+                }
+              ]
+            },
+            "width": 6,
+            "dashes": [30, 10]
+          }
+        ],
+        "flipX": true
+      }
+    },
+    "flipped-x-card": {
+      "type": "box",
+      "parentId": "flipped-x",
+      "link": "card",
+      "index": "a4",
+      "name": "Clipping box with its own corners, an angular fill and an outside stroke",
+      "props": {
+        "x": 60,
+        "y": 250,
+        "width": 280,
+        "height": 180,
+        "rotation": 8,
+        "cornerRadius": [0, 40, 0, 90],
+        "fills": [
+          {
+            "type": "angular",
+            "center": {
+              "x": 0.3,
+              "y": 0.4
+            },
+            "angle": 30,
+            "stops": [
+              {
+                "offset": 0.0,
+                "color": "#3D6BFFFF"
+              },
+              {
+                "offset": 0.5,
+                "color": "#FFD23FFF"
+              },
+              {
+                "offset": 1.0,
+                "color": "#3D6BFFFF"
+              }
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "paint": {
+              "type": "solid",
+              "color": "#1A1420FF"
+            },
+            "width": 8,
+            "align": "outside"
+          }
+        ],
+        "flipX": true
+      }
+    },
+    "flipped-x-card-dot": {
+      "type": "graphic",
+      "parentId": "flipped-x-card",
+      "link": "card-dot",
+      "index": "a0",
+      "name": "Dot cut by the box's corner",
+      "props": {
+        "x": 20,
+        "y": 220,
+        "width": 140,
+        "height": 120,
+        "shape": {
+          "kind": "polygon",
+          "sides": 3
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#FFFFFFFF"
+          }
+        ],
+        "flipX": true
+      }
+    },
+    "flipped-x-cut": {
+      "type": "boolean",
+      "parentId": "flipped-x",
+      "link": "cut",
+      "index": "a5",
+      "name": "Subtract with a gradient of its own",
+      "props": {
+        "x": 460,
+        "y": 400,
+        "width": 220,
+        "height": 160,
+        "op": "subtract",
+        "fills": [
+          {
+            "type": "linear",
+            "from": {
+              "x": 0,
+              "y": 0
+            },
+            "to": {
+              "x": 1,
+              "y": 1
+            },
+            "stops": [
+              {
+                "offset": 0.0,
+                "color": "#0F7246FF"
+              },
+              {
+                "offset": 1.0,
+                "color": "#FFD23FFF"
+              }
+            ]
+          }
+        ],
+        "flipX": true
+      }
+    },
+    "flipped-x-cut-base": {
+      "type": "graphic",
+      "parentId": "flipped-x-cut",
+      "link": "cut-base",
+      "index": "a0",
+      "name": "Base",
+      "props": {
+        "x": 460,
+        "y": 400,
+        "width": 220,
+        "height": 160,
+        "shape": {
+          "kind": "rect",
+          "corners": [60, 0, 0, 20]
+        },
+        "flipX": true
+      }
+    },
+    "flipped-x-cut-bite": {
+      "type": "graphic",
+      "parentId": "flipped-x-cut",
+      "link": "cut-bite",
+      "index": "a1",
+      "name": "Turned bite",
+      "props": {
+        "x": 430,
+        "y": 380,
+        "width": 120,
+        "height": 90,
+        "rotation": -30,
+        "shape": {
+          "kind": "ellipse"
+        },
+        "flipX": true
+      }
+    },
+    "flipped-x-team": {
+      "type": "group",
+      "parentId": "flipped-x",
+      "link": "team",
+      "index": "a6",
+      "name": "Turned group of a turned star",
+      "props": {
+        "x": 260,
+        "y": 470,
+        "width": 160,
+        "height": 120,
+        "rotation": -15
+      }
+    },
+    "flipped-x-team-star": {
+      "type": "graphic",
+      "parentId": "flipped-x-team",
+      "link": "team-star",
+      "index": "a0",
+      "name": "Star in a turned group",
+      "props": {
+        "x": 260,
+        "y": 470,
+        "width": 160,
+        "height": 120,
+        "rotation": -10,
+        "shape": {
+          "kind": "star",
+          "points": 4,
+          "innerRadius": 0.3
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#D81B60FF"
+          }
+        ],
+        "flipX": true
+      }
+    },
+    "flipped-x-spill": {
+      "type": "text",
+      "parentId": "flipped-x",
+      "link": "spill",
+      "index": "a7",
+      "name": "Translucent text whose lines spill out of its fixed box",
+      "props": {
+        "x": 80,
+        "y": 470,
+        "width": 140,
+        "height": 60,
+        "opacity": 0.7,
+        "boxMode": "fixed",
+        "text": "Spills past its box",
+        "style": {
+          "fontFamily": "Noto Sans",
+          "fontSize": 36,
+          "fontWeight": 700,
+          "color": "#263238FF"
+        },
+        "flipX": true
+      }
+    },
+    "flipped-y-star": {
+      "type": "graphic",
+      "parentId": "flipped-y",
+      "link": "star",
+      "index": "a0",
+      "name": "Turned star with a glow and a dashed stroke",
+      "props": {
+        "x": 40,
+        "y": 500,
+        "width": 200,
+        "height": 180,
+        "rotation": -20,
+        "shape": {
+          "kind": "star",
+          "points": 5,
+          "innerRadius": 0.45,
+          "cornerRadius": 8
+        },
+        "fills": [
+          {
+            "type": "linear",
+            "from": {
+              "x": 0,
+              "y": 0
+            },
+            "to": {
+              "x": 1,
+              "y": 0.3
+            },
+            "stops": [
+              {
+                "offset": 0.0,
+                "color": "#E0157FFF"
+              },
+              {
+                "offset": 1.0,
+                "color": "#FFD23FFF"
+              }
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "paint": {
+              "type": "solid",
+              "color": "#1F3A5FFF"
+            },
+            "width": 6,
+            "dashes": [24, 8, 4]
+          }
+        ],
+        "effects": [
+          {
+            "type": "glow",
+            "blur": 16,
+            "spread": 2,
+            "color": "#3D6BFF99"
+          }
+        ],
+        "flipY": true
+      }
+    },
+    "flipped-y-photo": {
+      "type": "graphic",
+      "parentId": "flipped-y",
+      "link": "photo",
+      "index": "a1",
+      "name": "Photo cropped off centre, each corner its own",
+      "props": {
+        "x": 300,
+        "y": 520,
+        "width": 220,
+        "height": 160,
+        "shape": {
+          "kind": "rect",
+          "corners": [0, 24, 60, 90]
+        },
+        "fills": [
+          {
+            "type": "image",
+            "assetId": "sneaker",
+            "fit": "crop",
+            "crop": {
+              "x": 500,
+              "y": 450,
+              "width": 1100,
+              "height": 800
+            }
+          }
+        ],
+        "flipY": true
+      }
+    },
+    "flipped-y-hole": {
+      "type": "graphic",
+      "parentId": "flipped-y",
+      "link": "hole",
+      "index": "a2",
+      "name": "Path with a hole and an off-centre radial",
+      "props": {
+        "x": 560,
+        "y": 500,
+        "width": 130,
+        "height": 180,
+        "shape": {
+          "kind": "path",
+          "d": "M0 0 L100 20 L80 100 L10 90 Z M20 20 L60 30 L30 60 Z",
+          "fillRule": "evenodd",
+          "drawnIn": {
+            "width": 100,
+            "height": 100
+          }
+        },
+        "fills": [
+          {
+            "type": "radial",
+            "center": {
+              "x": 0.2,
+              "y": 0.3
+            },
+            "radius": 0.8,
+            "stops": [
+              {
+                "offset": 0.0,
+                "color": "#FFFFFFFF"
+              },
+              {
+                "offset": 1.0,
+                "color": "#0F7246FF"
+              }
+            ]
+          }
+        ],
+        "flipY": true
+      }
+    },
+    "flipped-y-arrow": {
+      "type": "graphic",
+      "parentId": "flipped-y",
+      "link": "arrow",
+      "index": "a3",
+      "name": "Turned dashed line, an arrow at its start and a triangle at its end",
+      "props": {
+        "x": 60,
+        "y": 410,
+        "width": 260,
+        "height": 40,
+        "rotation": -12,
+        "shape": {
+          "kind": "line",
+          "start": "arrow",
+          "end": "triangle"
+        },
+        "strokes": [
+          {
+            "paint": {
+              "type": "linear",
+              "from": {
+                "x": 0,
+                "y": 0
+              },
+              "to": {
+                "x": 1,
+                "y": 0
+              },
+              "stops": [
+                {
+                  "offset": 0.0,
+                  "color": "#E0157FFF"
+                },
+                {
+                  "offset": 1.0,
+                  "color": "#1F3A5FFF"
+                }
+              ]
+            },
+            "width": 6,
+            "dashes": [30, 10]
+          }
+        ],
+        "flipY": true
+      }
+    },
+    "flipped-y-card": {
+      "type": "box",
+      "parentId": "flipped-y",
+      "link": "card",
+      "index": "a4",
+      "name": "Clipping box with its own corners, an angular fill and an outside stroke",
+      "props": {
+        "x": 380,
+        "y": 290,
+        "width": 280,
+        "height": 180,
+        "rotation": 8,
+        "cornerRadius": [0, 40, 0, 90],
+        "fills": [
+          {
+            "type": "angular",
+            "center": {
+              "x": 0.3,
+              "y": 0.4
+            },
+            "angle": 30,
+            "stops": [
+              {
+                "offset": 0.0,
+                "color": "#3D6BFFFF"
+              },
+              {
+                "offset": 0.5,
+                "color": "#FFD23FFF"
+              },
+              {
+                "offset": 1.0,
+                "color": "#3D6BFFFF"
+              }
+            ]
+          }
+        ],
+        "strokes": [
+          {
+            "paint": {
+              "type": "solid",
+              "color": "#1A1420FF"
+            },
+            "width": 8,
+            "align": "outside"
+          }
+        ],
+        "flipY": true
+      }
+    },
+    "flipped-y-card-dot": {
+      "type": "graphic",
+      "parentId": "flipped-y-card",
+      "link": "card-dot",
+      "index": "a0",
+      "name": "Dot cut by the box's corner",
+      "props": {
+        "x": 560,
+        "y": 380,
+        "width": 140,
+        "height": 120,
+        "shape": {
+          "kind": "polygon",
+          "sides": 3
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#FFFFFFFF"
+          }
+        ],
+        "flipY": true
+      }
+    },
+    "flipped-y-cut": {
+      "type": "boolean",
+      "parentId": "flipped-y",
+      "link": "cut",
+      "index": "a5",
+      "name": "Subtract with a gradient of its own",
+      "props": {
+        "x": 40,
+        "y": 160,
+        "width": 220,
+        "height": 160,
+        "op": "subtract",
+        "fills": [
+          {
+            "type": "linear",
+            "from": {
+              "x": 0,
+              "y": 0
+            },
+            "to": {
+              "x": 1,
+              "y": 1
+            },
+            "stops": [
+              {
+                "offset": 0.0,
+                "color": "#0F7246FF"
+              },
+              {
+                "offset": 1.0,
+                "color": "#FFD23FFF"
+              }
+            ]
+          }
+        ],
+        "flipY": true
+      }
+    },
+    "flipped-y-cut-base": {
+      "type": "graphic",
+      "parentId": "flipped-y-cut",
+      "link": "cut-base",
+      "index": "a0",
+      "name": "Base",
+      "props": {
+        "x": 40,
+        "y": 160,
+        "width": 220,
+        "height": 160,
+        "shape": {
+          "kind": "rect",
+          "corners": [60, 0, 0, 20]
+        },
+        "flipY": true
+      }
+    },
+    "flipped-y-cut-bite": {
+      "type": "graphic",
+      "parentId": "flipped-y-cut",
+      "link": "cut-bite",
+      "index": "a1",
+      "name": "Turned bite",
+      "props": {
+        "x": 170,
+        "y": 250,
+        "width": 120,
+        "height": 90,
+        "rotation": -30,
+        "shape": {
+          "kind": "ellipse"
+        },
+        "flipY": true
+      }
+    },
+    "flipped-y-team": {
+      "type": "group",
+      "parentId": "flipped-y",
+      "link": "team",
+      "index": "a6",
+      "name": "Turned group of a turned star",
+      "props": {
+        "x": 300,
+        "y": 130,
+        "width": 160,
+        "height": 120,
+        "rotation": -15
+      }
+    },
+    "flipped-y-team-star": {
+      "type": "graphic",
+      "parentId": "flipped-y-team",
+      "link": "team-star",
+      "index": "a0",
+      "name": "Star in a turned group",
+      "props": {
+        "x": 300,
+        "y": 130,
+        "width": 160,
+        "height": 120,
+        "rotation": -10,
+        "shape": {
+          "kind": "star",
+          "points": 4,
+          "innerRadius": 0.3
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#D81B60FF"
+          }
+        ],
+        "flipY": true
+      }
+    },
+    "flipped-y-spill": {
+      "type": "text",
+      "parentId": "flipped-y",
+      "link": "spill",
+      "index": "a7",
+      "name": "Translucent text whose lines spill out of its fixed box",
+      "props": {
+        "x": 500,
+        "y": 190,
+        "width": 140,
+        "height": 60,
+        "opacity": 0.7,
+        "boxMode": "fixed",
+        "text": "Spills past its box",
+        "style": {
+          "fontFamily": "Noto Sans",
+          "fontSize": 36,
+          "fontWeight": 700,
+          "color": "#263238FF"
+        },
+        "flipY": true
+      }
+    },
+    "shadows-a0": {
+      "type": "graphic",
+      "parentId": "shadows",
+      "link": "shadows-a0",
+      "index": "a0",
+      "name": "Shadowed triangle",
+      "props": {
+        "x": 80,
+        "y": 120,
+        "width": 160,
+        "height": 160,
+        "shape": {
+          "kind": "path",
+          "d": "M0 0 L160 80 L0 160 Z"
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#3D6BFFFF"
+          }
+        ],
+        "effects": [
+          {
+            "type": "dropShadow",
+            "x": 30,
+            "y": 20,
+            "blur": 8,
+            "spread": 6,
+            "color": "#1A142099"
+          },
+          {
+            "type": "innerShadow",
+            "x": 10,
+            "y": 6,
+            "blur": 4,
+            "spread": 0,
+            "color": "#FFFFFFCC"
+          }
+        ],
+        "flipX": true
+      }
+    },
+    "shadows-a1": {
+      "type": "graphic",
+      "parentId": "shadows",
+      "link": "shadows-a1",
+      "index": "a1",
+      "name": "Shadowed triangle",
+      "props": {
+        "x": 380,
+        "y": 120,
+        "width": 160,
+        "height": 160,
+        "shape": {
+          "kind": "path",
+          "d": "M0 0 L160 0 L80 160 Z"
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#3D6BFFFF"
+          }
+        ],
+        "effects": [
+          {
+            "type": "dropShadow",
+            "x": 30,
+            "y": 20,
+            "blur": 8,
+            "spread": 6,
+            "color": "#1A142099"
+          },
+          {
+            "type": "innerShadow",
+            "x": 10,
+            "y": 6,
+            "blur": 4,
+            "spread": 0,
+            "color": "#FFFFFFCC"
+          }
+        ],
+        "flipY": true
+      }
+    },
+    "by-hand-a0": {
+      "type": "graphic",
+      "parentId": "by-hand",
+      "link": "by-hand-a0",
+      "index": "a0",
+      "name": "Shadowed triangle",
+      "props": {
+        "x": 80,
+        "y": 120,
+        "width": 160,
+        "height": 160,
+        "shape": {
+          "kind": "path",
+          "d": "M160 0 L0 80 L160 160 Z"
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#3D6BFFFF"
+          }
+        ],
+        "effects": [
+          {
+            "type": "dropShadow",
+            "x": 30,
+            "y": 20,
+            "blur": 8,
+            "spread": 6,
+            "color": "#1A142099"
+          },
+          {
+            "type": "innerShadow",
+            "x": 10,
+            "y": 6,
+            "blur": 4,
+            "spread": 0,
+            "color": "#FFFFFFCC"
+          }
+        ]
+      }
+    },
+    "by-hand-a1": {
+      "type": "graphic",
+      "parentId": "by-hand",
+      "link": "by-hand-a1",
+      "index": "a1",
+      "name": "Shadowed triangle",
+      "props": {
+        "x": 380,
+        "y": 120,
+        "width": 160,
+        "height": 160,
+        "shape": {
+          "kind": "path",
+          "d": "M0 160 L160 160 L80 0 Z"
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#3D6BFFFF"
+          }
+        ],
+        "effects": [
+          {
+            "type": "dropShadow",
+            "x": 30,
+            "y": 20,
+            "blur": 8,
+            "spread": 6,
+            "color": "#1A142099"
+          },
+          {
+            "type": "innerShadow",
+            "x": 10,
+            "y": 6,
+            "blur": 4,
+            "spread": 0,
+            "color": "#FFFFFFCC"
+          }
+        ]
+      }
+    }
+  }
+}

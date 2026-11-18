@@ -1,0 +1,1045 @@
+{
+  "meta": {
+    "designId": "shadows-and-gradients",
+    "name": "Shadows and gradients"
+  },
+  "pages": {
+    "p1": {
+      "name": "Page 1",
+      "order": "a0"
+    }
+  },
+  "frames": {
+    "sq": {
+      "pageId": "p1",
+      "name": "Square 1:1",
+      "width": 1080,
+      "height": 1080,
+      "x": 0,
+      "y": 0,
+      "fills": [
+        {
+          "type": "radial",
+          "center": {
+            "x": 0.5,
+            "y": 0.45
+          },
+          "radius": 0.75,
+          "stops": [
+            {
+              "offset": 0,
+              "color": "#FFF3E0FF"
+            },
+            {
+              "offset": 0.6,
+              "color": "#FFCCBCFF"
+            },
+            {
+              "offset": 1,
+              "color": "#B3E5FCFF"
+            }
+          ]
+        }
+      ],
+      "order": "a0"
+    },
+    "banner": {
+      "pageId": "p1",
+      "name": "Leaderboard 728 × 90",
+      "width": 728,
+      "height": 90,
+      "x": 1200,
+      "y": 0,
+      "fills": [
+        {
+          "type": "radial",
+          "center": {
+            "x": 0.5,
+            "y": 0.45
+          },
+          "radius": 0.75,
+          "stops": [
+            {
+              "offset": 0,
+              "color": "#FFF3E0FF"
+            },
+            {
+              "offset": 0.6,
+              "color": "#FFCCBCFF"
+            },
+            {
+              "offset": 1,
+              "color": "#B3E5FCFF"
+            }
+          ]
+        }
+      ],
+      "order": "a1"
+    }
+  },
+  "nodes": {
+    "glass": {
+      "type": "graphic",
+      "parentId": "sq",
+      "link": "glass",
+      "index": "a0",
+      "name": "Translucent card, shadow hidden",
+      "props": {
+        "x": 50.0,
+        "y": 40.0,
+        "width": 180,
+        "height": 130,
+        "shape": {
+          "kind": "rect",
+          "cornerRadius": 18
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#E5397380"
+          }
+        ],
+        "effects": [
+          {
+            "type": "dropShadow",
+            "x": 10,
+            "y": 12,
+            "blur": 14,
+            "spread": 0,
+            "color": "#1A237E99"
+          }
+        ]
+      },
+      "role": "decoration"
+    },
+    "through": {
+      "type": "graphic",
+      "parentId": "sq",
+      "link": "through",
+      "index": "a1",
+      "name": "Translucent card, shadow shown through",
+      "props": {
+        "x": 315.0,
+        "y": 40.0,
+        "width": 180,
+        "height": 130,
+        "shape": {
+          "kind": "rect",
+          "cornerRadius": 18
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#E5397380"
+          }
+        ],
+        "effects": [
+          {
+            "type": "dropShadow",
+            "x": 10,
+            "y": 12,
+            "blur": 14,
+            "spread": 0,
+            "color": "#1A237E99",
+            "showBehind": true
+          }
+        ]
+      },
+      "role": "decoration"
+    },
+    "faded": {
+      "type": "graphic",
+      "parentId": "sq",
+      "link": "faded",
+      "index": "a2",
+      "name": "Card at opacity 0.5",
+      "props": {
+        "x": 580.0,
+        "y": 40.0,
+        "width": 180,
+        "height": 130,
+        "shape": {
+          "kind": "rect",
+          "cornerRadius": 18
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#E53973FF"
+          }
+        ],
+        "opacity": 0.5,
+        "effects": [
+          {
+            "type": "dropShadow",
+            "x": 10,
+            "y": 12,
+            "blur": 14,
+            "spread": 0,
+            "color": "#1A237E99"
+          }
+        ]
+      },
+      "role": "decoration"
+    },
+    "stroked": {
+      "type": "graphic",
+      "parentId": "sq",
+      "link": "stroked",
+      "index": "a3",
+      "name": "Translucent card with a translucent stroke",
+      "props": {
+        "x": 845.0,
+        "y": 40.0,
+        "width": 180,
+        "height": 130,
+        "shape": {
+          "kind": "rect",
+          "cornerRadius": 18
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#3949AB55"
+          }
+        ],
+        "strokes": [
+          {
+            "paint": {
+              "type": "solid",
+              "color": "#3949AB99"
+            },
+            "width": 10,
+            "align": "outside"
+          }
+        ],
+        "effects": [
+          {
+            "type": "dropShadow",
+            "x": 10,
+            "y": 12,
+            "blur": 14,
+            "spread": 0,
+            "color": "#1A237E99"
+          }
+        ]
+      },
+      "role": "decoration"
+    },
+    "rounded": {
+      "type": "graphic",
+      "parentId": "sq",
+      "link": "rounded",
+      "index": "a4",
+      "name": "Rounded card with spread",
+      "props": {
+        "x": 50.0,
+        "y": 250.0,
+        "width": 180,
+        "height": 130,
+        "shape": {
+          "kind": "rect",
+          "cornerRadius": 40
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#FFFFFFFF"
+          }
+        ],
+        "effects": [
+          {
+            "type": "dropShadow",
+            "x": 0,
+            "y": 8,
+            "blur": 16,
+            "spread": 14,
+            "color": "#1A237E99"
+          }
+        ]
+      },
+      "role": "decoration"
+    },
+    "star": {
+      "type": "graphic",
+      "parentId": "sq",
+      "link": "star",
+      "index": "a5",
+      "name": "Star with spread",
+      "props": {
+        "x": 330.0,
+        "y": 240.0,
+        "width": 150,
+        "height": 150,
+        "shape": {
+          "kind": "star",
+          "points": 5,
+          "innerRadius": 0.45,
+          "cornerRadius": 6
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#FFB300FF"
+          }
+        ],
+        "effects": [
+          {
+            "type": "dropShadow",
+            "x": 6,
+            "y": 6,
+            "blur": 6,
+            "spread": 10,
+            "color": "#6D4C41AA"
+          }
+        ]
+      },
+      "role": "decoration"
+    },
+    "ellipse": {
+      "type": "graphic",
+      "parentId": "sq",
+      "link": "ellipse",
+      "index": "a6",
+      "name": "Ellipse with spread",
+      "props": {
+        "x": 580.0,
+        "y": 250.0,
+        "width": 180,
+        "height": 130,
+        "shape": {
+          "kind": "ellipse"
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#26A69AFF"
+          }
+        ],
+        "effects": [
+          {
+            "type": "dropShadow",
+            "x": 0,
+            "y": 0,
+            "blur": 10,
+            "spread": 16,
+            "color": "#00695CAA"
+          }
+        ]
+      },
+      "role": "decoration"
+    },
+    "open": {
+      "type": "graphic",
+      "parentId": "sq",
+      "link": "open",
+      "index": "a7",
+      "name": "Open path with spread",
+      "props": {
+        "x": 845.0,
+        "y": 250.0,
+        "width": 180,
+        "height": 130,
+        "shape": {
+          "kind": "path",
+          "d": "M0 130 C 40 0 140 0 180 130"
+        },
+        "fills": [],
+        "strokes": [
+          {
+            "paint": {
+              "type": "solid",
+              "color": "#5E35B1FF"
+            },
+            "width": 12,
+            "align": "center",
+            "cap": "round"
+          }
+        ],
+        "effects": [
+          {
+            "type": "dropShadow",
+            "x": 0,
+            "y": 10,
+            "blur": 6,
+            "spread": 6,
+            "color": "#311B9299"
+          }
+        ]
+      },
+      "role": "decoration"
+    },
+    "inner": {
+      "type": "graphic",
+      "parentId": "sq",
+      "link": "inner",
+      "index": "a8",
+      "name": "Inner shadow with spread",
+      "props": {
+        "x": 50.0,
+        "y": 460.0,
+        "width": 180,
+        "height": 130,
+        "shape": {
+          "kind": "rect",
+          "cornerRadius": 30
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#FFF8E1FF"
+          }
+        ],
+        "effects": [
+          {
+            "type": "innerShadow",
+            "x": 4,
+            "y": 6,
+            "blur": 10,
+            "spread": 10,
+            "color": "#BF360CAA"
+          }
+        ]
+      },
+      "role": "decoration"
+    },
+    "pair": {
+      "type": "boolean",
+      "parentId": "sq",
+      "link": "pair",
+      "index": "a9",
+      "name": "Two-contour union, shrunk shadow",
+      "props": {
+        "x": 305.0,
+        "y": 460.0,
+        "width": 200,
+        "height": 130,
+        "op": "union",
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#43A047FF"
+          }
+        ],
+        "effects": [
+          {
+            "type": "dropShadow",
+            "x": 14,
+            "y": 14,
+            "blur": 4,
+            "spread": -12,
+            "color": "#1B5E20CC"
+          }
+        ]
+      },
+      "role": "decoration"
+    },
+    "pairA": {
+      "type": "graphic",
+      "parentId": "pair",
+      "link": "pairA",
+      "index": "a0",
+      "name": "Operand pairA",
+      "props": {
+        "x": 305.0,
+        "y": 460.0,
+        "width": 90,
+        "height": 130,
+        "shape": {
+          "kind": "rect",
+          "cornerRadius": 12
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#9E9E9EFF"
+          }
+        ]
+      },
+      "role": "decoration"
+    },
+    "pairB": {
+      "type": "graphic",
+      "parentId": "pair",
+      "link": "pairB",
+      "index": "a1",
+      "name": "Operand pairB",
+      "props": {
+        "x": 415.0,
+        "y": 460.0,
+        "width": 90,
+        "height": 130,
+        "shape": {
+          "kind": "ellipse"
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#9E9E9EFF"
+          }
+        ]
+      },
+      "role": "decoration"
+    },
+    "pill": {
+      "type": "graphic",
+      "parentId": "sq",
+      "link": "pill",
+      "index": "aA",
+      "name": "Glow on a 50 % pill",
+      "props": {
+        "x": 570.0,
+        "y": 485.0,
+        "width": 200,
+        "height": 80,
+        "shape": {
+          "kind": "rect",
+          "cornerRadius": 40
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#FF48B0FF",
+            "opacity": 0.5
+          }
+        ],
+        "effects": [
+          {
+            "type": "glow",
+            "blur": 24,
+            "spread": 4,
+            "color": "#FF48B0CC"
+          }
+        ]
+      },
+      "role": "decoration"
+    },
+    "group": {
+      "type": "group",
+      "parentId": "sq",
+      "link": "group",
+      "index": "aB",
+      "name": "Group of translucent dots, shadowed",
+      "props": {
+        "blendMode": "pass-through",
+        "x": 835.0,
+        "y": 455.0,
+        "width": 200,
+        "height": 140,
+        "effects": [
+          {
+            "type": "dropShadow",
+            "x": 8,
+            "y": 10,
+            "blur": 12,
+            "spread": 4,
+            "color": "#0D47A199"
+          }
+        ]
+      },
+      "role": "decoration"
+    },
+    "dot0": {
+      "type": "graphic",
+      "parentId": "group",
+      "link": "dot0",
+      "index": "a0",
+      "name": "Dot 0",
+      "props": {
+        "x": 835.0,
+        "y": 485.0,
+        "width": 80,
+        "height": 80,
+        "shape": {
+          "kind": "ellipse"
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#1E88E599"
+          }
+        ]
+      },
+      "role": "decoration"
+    },
+    "dot1": {
+      "type": "graphic",
+      "parentId": "group",
+      "link": "dot1",
+      "index": "a1",
+      "name": "Dot 1",
+      "props": {
+        "x": 895.0,
+        "y": 485.0,
+        "width": 80,
+        "height": 80,
+        "shape": {
+          "kind": "ellipse"
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#FDD835CC"
+          }
+        ]
+      },
+      "role": "decoration"
+    },
+    "dot2": {
+      "type": "graphic",
+      "parentId": "group",
+      "link": "dot2",
+      "index": "a2",
+      "name": "Dot 2",
+      "props": {
+        "x": 955.0,
+        "y": 485.0,
+        "width": 80,
+        "height": 80,
+        "shape": {
+          "kind": "ellipse"
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#E5393599"
+          }
+        ]
+      },
+      "role": "decoration"
+    },
+    "text": {
+      "type": "text",
+      "parentId": "sq",
+      "link": "text",
+      "index": "aC",
+      "name": "Shadowed translucent text",
+      "props": {
+        "x": 25.0,
+        "y": 695.0,
+        "width": 230,
+        "height": 80,
+        "text": "Shadow",
+        "style": {
+          "fontFamily": "Noto Sans",
+          "fontSize": 48,
+          "fontWeight": 800,
+          "color": "#00897BB0"
+        },
+        "effects": [
+          {
+            "type": "dropShadow",
+            "x": 4,
+            "y": 6,
+            "blur": 6,
+            "spread": 2,
+            "color": "#004D40AA"
+          }
+        ]
+      }
+    },
+    "cutout": {
+      "type": "graphic",
+      "parentId": "sq",
+      "link": "cutout",
+      "index": "aD",
+      "name": "PNG cutout with spread",
+      "props": {
+        "x": 330.0,
+        "y": 660.0,
+        "width": 150,
+        "height": 150,
+        "shape": {
+          "kind": "rect",
+          "cornerRadius": 0
+        },
+        "fills": [
+          {
+            "type": "image",
+            "assetId": "cutout",
+            "fit": "fit"
+          }
+        ],
+        "effects": [
+          {
+            "type": "dropShadow",
+            "x": 8,
+            "y": 8,
+            "blur": 8,
+            "spread": 6,
+            "color": "#00000088"
+          }
+        ]
+      },
+      "role": "decoration"
+    },
+    "photo": {
+      "type": "graphic",
+      "parentId": "sq",
+      "link": "photo",
+      "index": "aE",
+      "name": "JPEG photo card with spread",
+      "props": {
+        "x": 570.0,
+        "y": 670.0,
+        "width": 200,
+        "height": 130,
+        "shape": {
+          "kind": "rect",
+          "cornerRadius": 24
+        },
+        "fills": [
+          {
+            "type": "image",
+            "assetId": "sneaker",
+            "fit": "fill"
+          }
+        ],
+        "effects": [
+          {
+            "type": "dropShadow",
+            "x": 0,
+            "y": 12,
+            "blur": 18,
+            "spread": 10,
+            "color": "#3E2723AA"
+          }
+        ]
+      },
+      "role": "decoration"
+    },
+    "blurred": {
+      "type": "graphic",
+      "parentId": "sq",
+      "link": "blurred",
+      "index": "aF",
+      "name": "Translucent card with a layer blur",
+      "props": {
+        "x": 845.0,
+        "y": 670.0,
+        "width": 180,
+        "height": 130,
+        "shape": {
+          "kind": "rect",
+          "cornerRadius": 24
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#7E57C2AA"
+          }
+        ],
+        "effects": [
+          {
+            "type": "dropShadow",
+            "x": 16,
+            "y": 0,
+            "blur": 8,
+            "spread": 0,
+            "color": "#1A237E99"
+          },
+          {
+            "type": "layerBlur",
+            "radius": 8
+          }
+        ]
+      },
+      "role": "decoration"
+    },
+    "turned": {
+      "type": "graphic",
+      "parentId": "sq",
+      "link": "turned",
+      "index": "aG",
+      "name": "Turned translucent card",
+      "props": {
+        "x": 65.0,
+        "y": 890.0,
+        "width": 150,
+        "height": 110,
+        "rotation": 20,
+        "shape": {
+          "kind": "rect",
+          "cornerRadius": 16
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#F4511E99"
+          }
+        ],
+        "effects": [
+          {
+            "type": "dropShadow",
+            "x": 14,
+            "y": 6,
+            "blur": 6,
+            "spread": 0,
+            "color": "#1A237E99"
+          }
+        ]
+      },
+      "role": "decoration"
+    },
+    "masked": {
+      "type": "group",
+      "parentId": "sq",
+      "link": "masked",
+      "index": "aH",
+      "name": "Masked card",
+      "props": {
+        "blendMode": "pass-through",
+        "x": 325.0,
+        "y": 865.0,
+        "width": 160,
+        "height": 160
+      },
+      "role": "decoration"
+    },
+    "mask": {
+      "type": "graphic",
+      "parentId": "masked",
+      "link": "mask",
+      "index": "a0",
+      "name": "Disc mask",
+      "props": {
+        "x": 325.0,
+        "y": 865.0,
+        "width": 160,
+        "height": 160,
+        "shape": {
+          "kind": "ellipse"
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#000000FF"
+          }
+        ],
+        "mask": "alpha"
+      },
+      "role": "decoration"
+    },
+    "maskedCard": {
+      "type": "graphic",
+      "parentId": "masked",
+      "link": "maskedCard",
+      "index": "a1",
+      "name": "Card under the mask",
+      "props": {
+        "x": 355.0,
+        "y": 895.0,
+        "width": 150,
+        "height": 150,
+        "shape": {
+          "kind": "rect",
+          "cornerRadius": 8
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#00ACC199"
+          }
+        ],
+        "effects": [
+          {
+            "type": "dropShadow",
+            "x": 10,
+            "y": 10,
+            "blur": 4,
+            "spread": 0,
+            "color": "#1A237E99"
+          }
+        ]
+      },
+      "role": "decoration"
+    },
+    "wide": {
+      "type": "graphic",
+      "parentId": "sq",
+      "link": "wide",
+      "index": "aI",
+      "name": "Round radial in a wide box",
+      "props": {
+        "x": 560.0,
+        "y": 900.0,
+        "width": 220,
+        "height": 90,
+        "shape": {
+          "kind": "rect",
+          "cornerRadius": 12
+        },
+        "fills": [
+          {
+            "type": "radial",
+            "center": {
+              "x": 0.3,
+              "y": 0.5
+            },
+            "radius": 0.9,
+            "stops": [
+              {
+                "offset": 0,
+                "color": "#FFFFFFFF"
+              },
+              {
+                "offset": 0.5,
+                "color": "#FF7043FF"
+              },
+              {
+                "offset": 1,
+                "color": "#4A148CFF"
+              }
+            ]
+          }
+        ]
+      },
+      "role": "decoration"
+    },
+    "tile": {
+      "type": "graphic",
+      "parentId": "sq",
+      "link": "tile",
+      "index": "aJ",
+      "name": "Tile at 50 %",
+      "props": {
+        "x": 835.0,
+        "y": 870.0,
+        "width": 200,
+        "height": 150,
+        "shape": {
+          "kind": "rect",
+          "cornerRadius": 20
+        },
+        "fills": [
+          {
+            "type": "image",
+            "assetId": "tile",
+            "fit": "tile",
+            "tileScale": 0.5
+          }
+        ]
+      },
+      "role": "decoration"
+    },
+    "glassBox": {
+      "type": "box",
+      "parentId": "sq",
+      "link": "glassBox",
+      "index": "aK",
+      "name": "Glass clipping box with a child",
+      "props": {
+        "x": 400,
+        "y": 380,
+        "width": 280,
+        "height": 90,
+        "clip": true,
+        "cornerRadius": 20,
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#FFFFFF66"
+          }
+        ],
+        "effects": [
+          {
+            "type": "dropShadow",
+            "x": 0,
+            "y": 14,
+            "blur": 20,
+            "spread": 0,
+            "color": "#00000066"
+          }
+        ]
+      },
+      "role": "decoration"
+    },
+    "glassChild": {
+      "type": "graphic",
+      "parentId": "glassBox",
+      "link": "glassChild",
+      "index": "a0",
+      "name": "Child of the glass box",
+      "props": {
+        "x": 420,
+        "y": 395,
+        "width": 60,
+        "height": 60,
+        "shape": {
+          "kind": "ellipse"
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#6A1B9AFF"
+          }
+        ]
+      },
+      "role": "decoration"
+    },
+    "bCard": {
+      "type": "graphic",
+      "parentId": "banner",
+      "link": "bCard",
+      "index": "a0",
+      "name": "Banner card",
+      "props": {
+        "x": 20,
+        "y": 15,
+        "width": 120,
+        "height": 60,
+        "shape": {
+          "kind": "rect",
+          "cornerRadius": 12
+        },
+        "fills": [
+          {
+            "type": "solid",
+            "color": "#E5397380"
+          }
+        ],
+        "effects": [
+          {
+            "type": "dropShadow",
+            "x": 4,
+            "y": 5,
+            "blur": 6,
+            "spread": 0,
+            "color": "#1A237E99"
+          }
+        ]
+      },
+      "role": "decoration"
+    },
+    "bText": {
+      "type": "text",
+      "parentId": "banner",
+      "link": "bText",
+      "index": "a1",
+      "name": "Banner text",
+      "props": {
+        "x": 170,
+        "y": 18,
+        "width": 400,
+        "height": 56,
+        "text": "Shadows, round",
+        "style": {
+          "fontFamily": "Noto Sans",
+          "fontSize": 36,
+          "fontWeight": 700,
+          "color": "#3949ABFF"
+        },
+        "effects": [
+          {
+            "type": "dropShadow",
+            "x": 2,
+            "y": 3,
+            "blur": 4,
+            "spread": 0,
+            "color": "#00000066"
+          }
+        ]
+      }
+    }
+  }
+}

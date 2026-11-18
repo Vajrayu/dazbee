@@ -1,0 +1,307 @@
+// Snapping while moving or resizing: to other layers' edges and centres, to equal spacing
+// between layers, to the edges and centre of what holds them, and to the frame's guides, with the
+// snap lines that show why.
+// Kept free of the editor so the maths can be tested on its own. Everything is in the design
+// pixels of one space: the frame's, or the one layers inside turned groups and boxes are kept in;
+// turned layers snap by the box around them in it.
+import type { Rect } from '@dazbee/schema'
+
+import type { Frame } from '../canvas/frames.ts'
+import type { Box, Handle } from './transform.ts'
+
+/**
+ * A line the moving box lines up with: `axis: 'x'` is a vertical line at x = `at`, drawn from
+ * `from` to `to` down the page. `points` are where along it the boxes met it, in order: the two
+ * corners of an edge on it, the middle of a centre on it.
+ */
+export interface SnapLine {
+  axis: 'x' | 'y'
+  at: number
+  from: number
+  to: number
+  points: number[]
+}
+/** One of the equal gaps a box snapped to: along `axis` from `from` to `to`, drawn across at `at`. */
+export interface Gap {
+  axis: 'x' | 'y'
+  from: number
+  to: number
+  at: number
+}
+/**
+ * What a drag in progress snapped to: snap lines and equal gaps, in the space of the `parent` the
+ * `layers` it drags were kept in as it gathered what to snap to (`Targets`).
+ */
+export interface DragSnap {
+  frame: Frame
+  parent: string
+  layers: string[]
+  snapLines: SnapLine[]
+  gaps: Gap[]
+}
+/**
+ * What a drag in progress snapped to, as it is shown: its snap lines and equal gaps, and `around`, the
+ * containers that turn their space in the frame as they are now, outermost first, as `drawnFrom`
+ * takes them.
+ */
+export interface ShownSnap {
+  frame: Frame
+  around: Box[]
+  snapLines: SnapLine[]
+  gaps: Gap[]
+}
+/**
+ * A box a drag's layers are within, whose lines snap, but along an axis it `follows` them on: there
+ * its sides and middle move with the layers dragged, so it gives no lines.
+ */
+export type WithinBox = Rect & { follows?: { width: boolean; height: boolean } }
+/** A frame's guide as a drag snaps to it: across `axis` at `at`, spanning the frame from `from` to `to` along the other axis. */
+export interface GuideLine {
+  axis: 'x' | 'y'
+  at: number
+  from: number
+  to: number
+}
+export interface Snapped {
+  dx: number
+  dy: number
+  snapLines: SnapLine[]
+  gaps: Gap[]
+}
+
+/** A line to snap to: a side or the middle of the box at index `box`, or a guide, with no box (-1) and the `span` it is drawn across. */
+interface Line {
+  at: number
+  box: number
+  span?: { from: number; to: number }
+}
+/** What a drag can snap to, worked out once when it starts. */
+export interface Targets {
+  /** The parent whose space they are in: a layer's id, or the frame's on the frame. */
+  parent: string
+  boxes: Rect[]
+  /** The boxes of the layers beside the dragged ones, which equal gaps are measured between. */
+  beside: Rect[]
+  xs: Line[]
+  ys: Line[]
+}
+type Axis = 'x' | 'y'
+
+/** How close a line has to come to snap, in screen pixels: the same reach at any zoom. */
+export const SNAP_DISTANCE = 6
+
+const EXACT = 0.01
+
+const lines = (boxes: WithinBox[], axis: 'x' | 'y'): Line[] =>
+  boxes.flatMap((b, box) => {
+    if (b.follows?.[axis === 'x' ? 'width' : 'height']) return []
+    const start = axis === 'x' ? b.x : b.y
+    const size = axis === 'x' ? b.width : b.height
+    return [
+      { at: start, box },
+      { at: start + size / 2, box },
+      { at: start + size, box },
+    ]
+  })
+const startOf = (b: Rect, axis: Axis) => (axis === 'x' ? b.x : b.y)
+const sizeOf = (b: Rect, axis: Axis) => (axis === 'x' ? b.width : b.height)
+const endOf = (b: Rect, axis: Axis) => startOf(b, axis) + sizeOf(b, axis)
+const across = (axis: Axis): Axis => (axis === 'x' ? 'y' : 'x')
+const overlaps = (a: Rect, b: Rect, axis: Axis) =>
+  startOf(a, axis) < endOf(b, axis) && startOf(b, axis) < endOf(a, axis)
+const moved = (b: Rect, axis: Axis, d: number): Rect => (axis === 'x' ? { ...b, x: b.x + d } : { ...b, y: b.y + d })
+
+/**
+ * The lines and boxes to snap to in the space of a `parent`: the boxes of the layers `beside` the
+ * dragged ones, and of what they are `within`, their parent and the frame, whose lines snap but
+ * along an axis one follows the dragged layers on, and which no equal gap is measured to; and the
+ * frame's `guides`, when the space is the frame's.
+ */
+export function snapTargets(beside: Rect[], within: WithinBox[], parent: string, guides: GuideLine[] = []): Targets {
+  const boxes = [...beside, ...within]
+  const xs = lines(boxes, 'x')
+  const ys = lines(boxes, 'y')
+  for (const { axis, at, from, to } of guides) (axis === 'x' ? xs : ys).push({ at, box: -1, span: { from, to } })
+  return { parent, boxes, beside, xs, ys }
+}
+
+/**
+ * Snaps a moving box: the offset to add to its move on each axis, each the nearest within
+ * `reach` design pixels (SNAP_DISTANCE over the zoom), and the snap lines and gaps that show why.
+ * An axis kept still (shift-dragging along the other one) doesn't snap.
+ */
+export function snapMove(
+  moving: Rect,
+  targets: Targets,
+  reach: number,
+  still: { x?: boolean; y?: boolean } = {},
+): Snapped {
+  const offset = (axis: Axis) => {
+    if (still[axis]) return 0
+    const start = startOf(moving, axis)
+    const size = sizeOf(moving, axis)
+    const line = nearestLine([start, start + size / 2, start + size], axis === 'x' ? targets.xs : targets.ys, reach)
+    const gap = nearestGap(moving, targets.beside, axis, reach)
+    if (line === null) return gap ?? 0
+    return gap !== null && Math.abs(gap) < Math.abs(line) ? gap : line
+  }
+  const dx = offset('x')
+  const dy = offset('y')
+  const box = moved(moved(moving, 'x', dx), 'y', dy)
+  const others = targets.beside
+  return {
+    dx,
+    dy,
+    snapLines: [...snapLinesFor(box, targets, 'x'), ...snapLinesFor(box, targets, 'y')],
+    gaps: [...gapsFor(box, others, 'x'), ...gapsFor(box, others, 'y')],
+  }
+}
+
+/**
+ * Snaps the edges a resize handle moves: the offset to add to the pointer on each axis, and the
+ * snap lines. Only the dragged edges snap; the others stay where the resize puts them. With
+ * `keepRatio` a corner snaps one edge only, the one nearer its snap line, and the other follows it.
+ */
+export function snapResize(box: Rect, handle: Handle, targets: Targets, reach: number, keepRatio = false): Snapped {
+  const edge = (axis: Axis, low: string, high: string) => {
+    const moves = handle.includes(high) ? endOf(box, axis) : handle.includes(low) ? startOf(box, axis) : null
+    return moves === null ? 0 : (nearestLine([moves], axis === 'x' ? targets.xs : targets.ys, reach) ?? 0)
+  }
+  let dx = edge('x', 'w', 'e')
+  let dy = edge('y', 'n', 's')
+  if (keepRatio && dx !== 0 && dy !== 0) {
+    if (Math.abs(dx) <= Math.abs(dy)) dy = 0
+    else dx = 0
+  }
+  let width = box.width + (handle.includes('e') ? dx : handle.includes('w') ? -dx : 0)
+  let height = box.height + (handle.includes('s') ? dy : handle.includes('n') ? -dy : 0)
+  // The side that follows grows by the same factor, from the corner opposite the handle.
+  if (keepRatio && box.width > 0 && box.height > 0) {
+    if (dx !== 0) height = (box.height * width) / box.width
+    else if (dy !== 0) width = (box.width * height) / box.height
+  }
+  const after: Rect = {
+    x: handle.includes('w') ? box.x + box.width - width : box.x,
+    y: handle.includes('n') ? box.y + box.height - height : box.y,
+    width,
+    height,
+  }
+  const only = (snapLines: SnapLine[], axis: Axis, edges: number[]) =>
+    snapLines.filter((g) => g.axis !== axis || edges.some((e) => Math.abs(e - g.at) < EXACT))
+  let snapLines = [...snapLinesFor(after, targets, 'x'), ...snapLinesFor(after, targets, 'y')]
+  snapLines = only(snapLines, 'x', [
+    handle.includes('e') ? endOf(after, 'x') : handle.includes('w') ? after.x : Number.NaN,
+  ])
+  snapLines = only(snapLines, 'y', [
+    handle.includes('s') ? endOf(after, 'y') : handle.includes('n') ? after.y : Number.NaN,
+  ])
+  return { dx, dy, snapLines, gaps: [] }
+}
+
+/** The nearest snap of some of the moving box's lines to the targets' lines, as the offset it needs; null with none within `reach`. */
+export function nearestLine(moving: number[], targets: Line[], reach: number) {
+  let best: number | null = null
+  for (const t of targets) {
+    for (const m of moving) {
+      const d = t.at - m
+      if (Math.abs(d) <= reach && (best === null || Math.abs(d) < Math.abs(best))) best = d
+    }
+  }
+  return best
+}
+
+/**
+ * The nearest equal-spacing snap along one axis: boxes level with the moving one (overlapping it
+ * across the axis) form a row. The moving box can sit centred between its two neighbours, or
+ * as far from one of them as two other boxes in the row are from each other.
+ */
+function nearestGap(moving: Rect, boxes: Rect[], axis: Axis, reach: number) {
+  const row = boxes
+    .filter((b) => overlaps(b, moving, across(axis)) && !overlaps(b, moving, axis))
+    .sort((a, b) => startOf(a, axis) - startOf(b, axis))
+  const before = row
+    .filter((b) => endOf(b, axis) <= startOf(moving, axis))
+    .sort((a, b) => endOf(b, axis) - endOf(a, axis))[0]
+  const after = row.find((b) => startOf(b, axis) >= endOf(moving, axis))
+  const gaps: number[] = []
+  for (let i = 1; i < row.length; i++) {
+    const gap = startOf(row[i] as Rect, axis) - endOf(row[i - 1] as Rect, axis)
+    if (gap > 0) gaps.push(gap)
+  }
+  const size = sizeOf(moving, axis)
+  const options: number[] = []
+  if (before && after) options.push((endOf(before, axis) + startOf(after, axis) - size) / 2)
+  for (const gap of gaps) {
+    if (before) options.push(endOf(before, axis) + gap)
+    if (after) options.push(startOf(after, axis) - gap - size)
+  }
+  let best: number | null = null
+  for (const start of options) {
+    const d = start - startOf(moving, axis)
+    if (Math.abs(d) <= reach && (best === null || Math.abs(d) < Math.abs(best))) best = d
+  }
+  return best
+}
+
+/**
+ * The snap lines for every target line a box now lines up with, spanning it and the boxes the lines
+ * belong to, or the frame for a guide's, crossed where the boxes meet them.
+ */
+function snapLinesFor(box: Rect, targets: Targets, axis: Axis): SnapLine[] {
+  const mine = [startOf(box, axis), startOf(box, axis) + sizeOf(box, axis) / 2, endOf(box, axis)]
+  const other = across(axis)
+  const meet = (b: Rect, at: number) => ({
+    from: startOf(b, other),
+    to: endOf(b, other),
+    points: pointsOn(b, at, axis),
+  })
+  const found = new Map<number, { from: number; to: number; points: number[] }[]>()
+  for (const t of axis === 'x' ? targets.xs : targets.ys) {
+    if (!mine.some((m) => Math.abs(m - t.at) < EXACT)) continue
+    const key = Math.round(t.at * 100) / 100
+    const met = t.span ? { ...t.span, points: [] } : meet(targets.boxes[t.box] as Rect, t.at)
+    found.set(key, [...(found.get(key) ?? []), met])
+  }
+  return [...found].map(([at, lined]) => {
+    const met = [...lined, meet(box, at)]
+    const points = met.flatMap((m) => m.points)
+    return {
+      axis,
+      at,
+      from: Math.min(...met.map((m) => m.from)),
+      to: Math.max(...met.map((m) => m.to)),
+      points: [...new Set(points.map((p) => Math.round(p * 100) / 100))].sort((p, q) => p - q),
+    }
+  })
+}
+
+/** Where along a line at `at` across `axis` a box meets it: its two corners when it is an edge, its middle when its centre. */
+function pointsOn(box: Rect, at: number, axis: Axis): number[] {
+  const other = across(axis)
+  const centre = startOf(box, axis) + sizeOf(box, axis) / 2
+  if (Math.abs(centre - at) < EXACT && sizeOf(box, axis) > 0) return [startOf(box, other) + sizeOf(box, other) / 2]
+  return [startOf(box, other), endOf(box, other)]
+}
+
+/** The gaps to mark when a box sits at equal spacing in its row: its own, and every equal one. */
+function gapsFor(box: Rect, boxes: Rect[], axis: Axis): Gap[] {
+  const row = [...boxes.filter((b) => overlaps(b, box, across(axis)) && !overlaps(b, box, axis)), box].sort(
+    (a, b) => startOf(a, axis) - startOf(b, axis),
+  )
+  const at = row.indexOf(box)
+  const pairs: [Rect, Rect][] = []
+  for (let i = 1; i < row.length; i++) pairs.push([row[i - 1] as Rect, row[i] as Rect])
+  const gapOf = ([a, b]: [Rect, Rect]) => startOf(b, axis) - endOf(a, axis)
+  const mine = pairs
+    .filter(([a, b]) => a === row[at] || b === row[at])
+    .map(gapOf)
+    .filter((g) => g > 0)
+  const marked = pairs.filter((pair) => gapOf(pair) > 0 && mine.some((g) => Math.abs(g - gapOf(pair)) < EXACT))
+  if (marked.length < 2) return []
+  return marked.map(([a, b]) => {
+    const other = across(axis)
+    const top = Math.max(startOf(a, other), startOf(b, other))
+    const bottom = Math.min(endOf(a, other), endOf(b, other))
+    return { axis, from: endOf(a, axis), to: startOf(b, axis), at: (top + bottom) / 2 }
+  })
+}

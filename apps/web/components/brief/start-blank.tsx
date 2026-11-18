@@ -1,0 +1,84 @@
+// Under the brand home's brief: "Or start blank" and a row of sizes, each drawn in its own shape and
+// named as the frame it makes is (Feed square, Feed portrait, Story and Reel, Link image), that open
+// a design of one empty frame in that size, and a last tile for the brand's templates. Each size is a
+// form, so it works before any script loads.
+import Link from 'next/link'
+
+import { SIZE_PRESETS } from '@dazbee/schema'
+
+import { SquaresFourIcon } from '@/components/ui/icons.tsx'
+import { brandPath } from '@/lib/brand-routes.ts'
+import { BRIEF_SIZES, type BriefSize } from '@/lib/brief.ts'
+import { format, type Messages } from '@/lib/i18n/index.ts'
+
+/** The longest side of a size's outline, in pixels. */
+const OUTLINE = 64
+
+const TILE =
+  'group flex cursor-pointer flex-col items-center gap-2 rounded-[14px] p-1.5 sm:p-2 text-label font-semibold text-muted transition-colors duration-[var(--chrome-fast)] hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring'
+const SHAPE =
+  'block rounded-[8px] border-[1.5px] border-line-strong bg-surface/60 shadow-panel transition-[border-color,transform,box-shadow] duration-[var(--chrome)] ease-[var(--ease-out)] group-hover:-translate-y-0.5 group-hover:border-accent group-hover:shadow-[0_0_0_4px_var(--accent-soft)]'
+
+export function StartBlank({
+  t,
+  workspaceId,
+  brandId,
+  start,
+}: {
+  t: Messages
+  workspaceId: string
+  brandId: string
+  /** Makes a design of one empty frame in this size and opens it. */
+  start: (sizeId: BriefSize) => Promise<void>
+}) {
+  return (
+    <section
+      aria-labelledby="start-blank"
+      className="rise mx-auto flex flex-col items-center gap-3"
+      style={{ animationDelay: '120ms' }}
+    >
+      <h2 id="start-blank" className="text-small font-medium text-subtle">
+        {t.home.startBlank}
+      </h2>
+      <ul className="flex flex-wrap items-end justify-center gap-1 sm:gap-3 md:gap-5">
+        {BRIEF_SIZES.map((id) => {
+          const preset = SIZE_PRESETS.find((p) => p.id === id)
+          if (!preset) return null
+          const scale = OUTLINE / Math.max(preset.width, preset.height)
+          const name = t.editor.sizes.preset[id]
+          return (
+            <li key={id}>
+              <form action={start.bind(null, id)}>
+                <button
+                  type="submit"
+                  aria-label={format(t.home.startIn, { name })}
+                  className={TILE}
+                  data-testid={`start-blank-${id}`}
+                >
+                  <span
+                    aria-hidden
+                    className={SHAPE}
+                    style={{ width: Math.round(preset.width * scale), height: Math.round(preset.height * scale) }}
+                  />
+                  <span className="max-w-20 text-center leading-tight">{name}</span>
+                </button>
+              </form>
+            </li>
+          )
+        })}
+        <li>
+          <Link href={brandPath(workspaceId, brandId, 'templates')} className={TILE} data-testid="start-template">
+            <span
+              aria-hidden
+              className={`${SHAPE} grid place-items-center border-dashed text-subtle`}
+              style={{ width: OUTLINE, height: OUTLINE }}
+            >
+              <SquaresFourIcon size={20} />
+            </span>
+            {t.home.fromTemplate}
+          </Link>
+        </li>
+      </ul>
+    </section>
+  )
+}

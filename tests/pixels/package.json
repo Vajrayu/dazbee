@@ -1,0 +1,33 @@
+{
+  "name": "@dazbee/pixels",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./pixels": "./src/pixels.ts",
+    "./vector": "./src/vector.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:speed": "vitest run --config vitest.speed.config.js"
+  },
+  "devDependencies": {
+    "@dazbee/canvaskit": "workspace:*",
+    "@dazbee/config": "workspace:*",
+    "@dazbee/doc": "workspace:*",
+    "@dazbee/editor": "workspace:*",
+    "@dazbee/export": "workspace:*",
+    "@dazbee/fonts": "workspace:*",
+    "@dazbee/renderer": "workspace:*",
+    "@dazbee/schema": "workspace:*",
+    "@dazbee/svg": "workspace:*",
+    "@hyzyla/pdfium": "3.0.0",
+    "@resvg/resvg-js": "2.6.2",
+    "@types/node": "^22.20.5",
+    "eslint": "^9.39.5",
+    "nanoid": "^6.0.2",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.5"
+  }
+}

@@ -1,0 +1,697 @@
+/* eslint-disable max-lines -- one deep module: one form whose state is one FormData contract */
+'use client'
+
+// The brief's form (#136), as in the final mock: a few words, then a chat-style toolbar. + adds a
+// reference ad (one of the brand's designs) or uploads images into the brand's assets, each shown
+// as a thumbnail above the brief; the Sizes dropdown picks the sizes to make; the Brand kit
+// button opens the whole kit to pick from, and the brand's Brand kit page to set it up or change it
+// (#200). Every choice is a form field, so Make drafts sends it
+// with the brief. The size checkboxes are in the page from the start, so the form works before
+// any script loads.
+import * as Popover from '@radix-ui/react-popover'
+import { useRouter } from 'next/navigation'
+import { type ReactNode, useRef, useState } from 'react'
+
+import { type AssetSummary, type BrandKit, SIZE_PRESETS } from '@dazbee/schema'
+
+import { useBrandKit } from '@/components/brand-kit/use-brand-kit.ts'
+import { buttonStyles } from '@/components/ui/button.tsx'
+import {
+  ArrowLeftIcon,
+  CaretDownIcon,
+  CircleNotchIcon,
+  LayoutIcon,
+  PaletteIcon,
+  PlusIcon,
+  SparkleIcon,
+  UploadSimpleIcon,
+  XIcon,
+} from '@/components/ui/icons.tsx'
+import { overlayScroll } from '@/components/ui/overlay-scroll.ts'
+import { Tick } from '@/components/ui/tick.tsx'
+import { Tooltip } from '@/components/ui/tooltip.tsx'
+import { brandPath } from '@/lib/brand-routes.ts'
+import { BRIEF_SIZES, type BriefSize } from '@/lib/brief.ts'
+import { cn } from '@/lib/cn.ts'
+import { useMessages } from '@/lib/i18n/client.tsx'
+import { format } from '@/lib/i18n/index.ts'
+import { IMAGE_ACCEPT, sendAsset } from '@/lib/upload-asset.ts'
+
+/** A design a brief can start from, with its picture's size when it has one. */
+export type BriefReference = {
+  id: string
+  name: string
+  updatedAt: string
+  cover: { width: number; height: number } | null
+}
+
+type Popup = 'add' | 'sizes' | 'kit'
+
+interface Upload {
+  key: string
+  name: string
+  progress: number
+  asset?: AssetSummary
+  error?: string
+}
+
+const TOOL = cn(
+  'inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border-[1.5px] border-line px-3 text-small font-semibold text-muted select-none',
+  'transition-[background-color,border-color,color] duration-[var(--chrome-fast)] hover:border-line-strong hover:text-text',
+  'aria-expanded:border-accent aria-expanded:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+)
+const ROUND = cn(TOOL, 'w-9 justify-center px-0')
+const PANEL = 'pop-in z-40 w-[min(18rem,calc(100vw-2rem))] rounded-card surface-frost p-1.5 outline-none'
+const ROW =
+  'flex w-full cursor-pointer items-center gap-3 rounded-row px-2.5 py-2 text-start text-small text-text transition-colors duration-[var(--chrome-fast)] hover:bg-hover hover:lit active:bg-pressed active:lit focus-visible:bg-hover focus-visible:lit focus-visible:outline-none'
+const LABEL = 'px-1 pt-3 pb-1.5 text-micro font-bold tracking-[0.08em] text-subtle uppercase'
+
+const designThumbnail = (workspaceId: string, brandId: string, design: BriefReference) =>
+  `${brandPath(workspaceId, brandId, 'designs', design.id, 'thumbnail')}?v=${Date.parse(design.updatedAt)}`
+const assetThumbnail = (workspaceId: string, brandId: string, assetId: string) =>
+  brandPath(workspaceId, brandId, 'assets', assetId, 'thumbnail')
+
+export function BriefForm({
+  workspaceId,
+  brandId,
+  brandName,
+  kit: first,
+  references,
+  action,
+}: {
+  workspaceId: string
+  brandId: string
+  brandName: string
+  /** The brand's kit as the page came with it; a change in the Brand kit panel shows here at once. */
+  kit: BrandKit
+  references: BriefReference[]
+  action: (form: FormData) => Promise<void>
+}) {
+  const t = useMessages()
+  const h = t.home
+  const k = h.kit
+  const kit = useBrandKit(workspaceId, brandId, first) ?? first
+  const [open, setOpen] = useState<Popup | null>(null)
+  const [adding, setAdding] = useState<'menu' | 'reference'>('menu')
+  const [sizes, setSizes] = useState<BriefSize[]>([BRIEF_SIZES[0]])
+  const [reference, setReference] = useState<BriefReference | null>(null)
+  const [uploads, setUploads] = useState<Upload[]>([])
+  const [useKit, setUseKit] = useState(true)
+  // The parts left out, so a colour or font added in the Brand kit panel is picked from the start.
+  const [offColors, setOffColors] = useState(() => new Set<string>())
+  const [offFonts, setOffFonts] = useState(() => new Set<string>())
+  const colors = kit.colors.filter((c) => !offColors.has(c.token))
+  const fonts = kit.fonts.filter((f) => !offFonts.has(f.token))
+  const [logo, setLogo] = useState(true)
+  const [voice, setVoice] = useState(true)
+  const files = useRef<HTMLInputElement>(null)
+
+  const router = useRouter()
+  /** Closes the kit popover and opens the brand's Brand kit page. */
+  const openKitPanel = () => {
+    setOpen(null)
+    router.push(brandPath(workspaceId, brandId, 'kit'))
+  }
+  const toggle = (popup: Popup) => (next: boolean) => {
+    setOpen(next ? popup : null)
+    if (next && popup === 'add') setAdding('menu')
+  }
+  const flip = <T,>(set: Set<T>, value: T) => {
+    const next = new Set(set)
+    if (next.has(value)) next.delete(value)
+    else next.add(value)
+    return next
+  }
+
+  const pickSize = (id: BriefSize, on: boolean) =>
+    setSizes((now) => {
+      // The last picked size stays: a brief makes at least one.
+      if (!on && now.length === 1) return now
+      return on ? BRIEF_SIZES.filter((s) => s === id || now.includes(s)) : now.filter((s) => s !== id)
+    })
+
+  const upload = (picked: File[]) => {
+    for (const file of picked) {
+      const key = crypto.randomUUID()
+      const change = (patch: Partial<Upload>) =>
+        setUploads((all) => all.map((u) => (u.key === key ? { ...u, ...patch } : u)))
+      setUploads((all) => [...all, { key, name: file.name, progress: 0 }])
+      sendAsset(workspaceId, brandId, file, (progress) => change({ progress }))
+        .then((asset) => change({ asset, progress: 1 }))
+        .catch((e: unknown) => change({ error: e instanceof Error ? e.message : String(e) }))
+    }
+  }
+
+  const sizeFields = (
+    <fieldset>
+      <legend className="sr-only">{h.sizes}</legend>
+      {BRIEF_SIZES.map((id) => {
+        const on = sizes.includes(id)
+        const last = on && sizes.length === 1
+        return (
+          <label
+            key={id}
+            className={cn(ROW, 'has-[:focus-visible]:bg-hover has-[:focus-visible]:lit')}
+            title={last ? h.lastSize : undefined}
+          >
+            <input
+              type="checkbox"
+              name="size"
+              value={id}
+              checked={on}
+              onChange={(e) => pickSize(id, e.target.checked)}
+              aria-describedby={last ? 'brief-last-size' : undefined}
+              className="sr-only"
+              data-testid={`brief-size-${id}`}
+            />
+            <Tick on={on} />
+            <span className="grid w-5 shrink-0 place-items-center text-muted">
+              <Shape id={id} size={16} />
+            </span>
+            <span className="flex-1">{t.editor.sizes.preset[id]}</span>
+          </label>
+        )
+      })}
+      {sizes.length === 1 && (
+        <p id="brief-last-size" className="px-2.5 pt-1 pb-1.5 text-caption text-subtle">
+          {h.lastSize}
+        </p>
+      )}
+    </fieldset>
+  )
+
+  const ring =
+    kit.colors.length > 0
+      ? `conic-gradient(${kit.colors
+          .slice(0, 6)
+          .map((c, i, all) => `${c.value} ${(i / all.length) * 100}% ${((i + 1) / all.length) * 100}%`)
+          .join(', ')})`
+      : undefined
+  const kitEmpty = kit.colors.length === 0 && kit.fonts.length === 0 && !kit.logoAssetId && !kit.voice.trim()
+  const hasAttachments = reference !== null || uploads.length > 0
+
+  return (
+    <form action={action} className="rounded-[20.5px] bg-surface p-3 md:px-5 md:py-4">
+      {hasAttachments && (
+        <ul aria-label={h.attachments} className="mb-2 flex flex-wrap gap-2 px-1 pt-1" data-testid="brief-attachments">
+          {reference && (
+            <Attachment
+              name={reference.name}
+              tag={h.referenceTag}
+              removeLabel={format(h.remove, { name: reference.name })}
+              onRemove={() => setReference(null)}
+              testId="brief-reference"
+            >
+              {reference.cover && (
+                <img src={designThumbnail(workspaceId, brandId, reference)} alt="" className="size-full object-cover" />
+              )}
+            </Attachment>
+          )}
+          {uploads.map((u) => (
+            <Attachment
+              key={u.key}
+              name={
+                u.error
+                  ? format(h.uploadFailed, { name: u.name, reason: u.error })
+                  : u.asset
+                    ? u.name
+                    : format(h.uploading, { name: u.name })
+              }
+              tag={h.imageTag}
+              removeLabel={format(h.remove, { name: u.name })}
+              onRemove={() => setUploads((all) => all.filter((x) => x.key !== u.key))}
+              failed={Boolean(u.error)}
+              testId="brief-image"
+            >
+              {u.asset ? (
+                <img src={assetThumbnail(workspaceId, brandId, u.asset.id)} alt="" className="size-full object-cover" />
+              ) : (
+                !u.error && <CircleNotchIcon size={18} aria-hidden className="animate-spin text-muted" />
+              )}
+            </Attachment>
+          ))}
+        </ul>
+      )}
+      {reference && <input type="hidden" name="reference" value={reference.id} />}
+      {uploads.flatMap((u) => (u.asset ? [<input key={u.key} type="hidden" name="image" value={u.asset.id} />] : []))}
+      {useKit && (
+        <>
+          <input type="hidden" name="kit" value="on" />
+          {colors.map((c) => (
+            <input key={c.token} type="hidden" name="kitColor" value={c.token} />
+          ))}
+          {fonts.map((f) => (
+            <input key={f.token} type="hidden" name="kitFont" value={f.token} />
+          ))}
+          {kit.logoAssetId && logo && <input type="hidden" name="kitLogo" value={kit.logoAssetId} />}
+          {kit.voice.trim() && voice && <input type="hidden" name="kitVoice" value="on" />}
+        </>
+      )}
+
+      <label htmlFor="brief" className="sr-only">
+        {h.brief}
+      </label>
+      <textarea
+        id="brief"
+        name="brief"
+        rows={1}
+        maxLength={2000}
+        placeholder={h.briefPlaceholder}
+        // One line, as in the final mock, growing with what is written.
+        className="block max-h-48 min-h-9 w-full resize-none bg-transparent px-1 py-1 text-body text-text [field-sizing:content] placeholder:text-subtle focus:outline-none md:text-lead"
+      />
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {/* + : a reference ad, or images uploaded to the brand's assets. */}
+        <Popover.Root open={open === 'add'} onOpenChange={toggle('add')}>
+          <Tooltip label={h.add}>
+            <Popover.Trigger asChild>
+              <button type="button" aria-label={h.add} className={ROUND} data-testid="brief-add">
+                <PlusIcon size={16} weight="bold" aria-hidden />
+              </button>
+            </Popover.Trigger>
+          </Tooltip>
+          <Popover.Content
+            align="start"
+            sideOffset={8}
+            collisionPadding={16}
+            aria-label={adding === 'menu' ? h.add : h.pickReference}
+            className={PANEL}
+          >
+            {adding === 'menu' ? (
+              <div className="flex flex-col">
+                <button type="button" onClick={() => setAdding('reference')} className={ROW}>
+                  <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-row bg-well text-muted">
+                    <LayoutIcon size={18} />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block font-semibold">{h.reference}</span>
+                    <span className="block text-tiny text-muted">{h.referenceHint}</span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(null)
+                    files.current?.click()
+                  }}
+                  className={ROW}
+                >
+                  <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-row bg-well text-muted">
+                    <UploadSimpleIcon size={18} />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block font-semibold">{h.upload}</span>
+                    <span className="block text-tiny text-muted">{h.uploadHint}</span>
+                  </span>
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col">
+                <div className="flex items-center gap-1 pb-1">
+                  <button
+                    type="button"
+                    aria-label={h.back}
+                    onClick={() => setAdding('menu')}
+                    className="grid size-8 cursor-pointer place-items-center rounded-row text-subtle hover:bg-hover hover:text-text active:bg-pressed"
+                  >
+                    <ArrowLeftIcon size={16} aria-hidden className="rtl:-scale-x-100" />
+                  </button>
+                  <span className="text-small font-semibold">{h.pickReference}</span>
+                </div>
+                {references.length === 0 ? (
+                  <p className="px-2 pb-2 text-tiny text-muted">{h.noReferences}</p>
+                ) : (
+                  <ul
+                    ref={overlayScroll}
+                    aria-label={h.pickReference}
+                    className="grid max-h-72 grid-cols-3 gap-1.5 overflow-y-auto p-0.5"
+                    data-testid="brief-references"
+                  >
+                    {references.map((design) => (
+                      <li key={design.id}>
+                        <button
+                          type="button"
+                          aria-label={design.name}
+                          aria-pressed={reference?.id === design.id}
+                          title={design.name}
+                          onClick={() => {
+                            setReference(design)
+                            setOpen(null)
+                          }}
+                          className="relative block aspect-square w-full cursor-pointer overflow-hidden rounded-[8px] border border-line bg-well transition-colors hover:border-line-strong aria-pressed:border-accent"
+                        >
+                          {design.cover && (
+                            <img
+                              src={designThumbnail(workspaceId, brandId, design)}
+                              alt=""
+                              width={design.cover.width}
+                              height={design.cover.height}
+                              loading="lazy"
+                              className="size-full object-cover"
+                            />
+                          )}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </Popover.Content>
+        </Popover.Root>
+        <input
+          id="brief-images"
+          ref={files}
+          type="file"
+          accept={IMAGE_ACCEPT}
+          multiple
+          hidden
+          data-testid="brief-upload"
+          onChange={(e) => {
+            upload([...(e.target.files ?? [])])
+            e.target.value = ''
+          }}
+        />
+
+        {/* Sizes: the four everyday ones, at least one picked. */}
+        <Popover.Root open={open === 'sizes'} onOpenChange={toggle('sizes')}>
+          <Popover.Trigger asChild>
+            <button type="button" className={TOOL} data-testid="brief-sizes">
+              <span aria-hidden className="flex items-center gap-0.5">
+                {sizes.slice(0, 3).map((id) => (
+                  <Shape key={id} id={id} size={13} />
+                ))}
+              </span>
+              {sizes.length === 1 ? h.sizesOne : format(h.sizesMany, { n: sizes.length })}
+              <CaretDownIcon size={12} weight="bold" aria-hidden />
+            </button>
+          </Popover.Trigger>
+          <Popover.Content
+            align="start"
+            sideOffset={8}
+            collisionPadding={16}
+            aria-label={h.sizes}
+            className={cn(PANEL, 'w-56')}
+          >
+            {sizeFields}
+          </Popover.Content>
+        </Popover.Root>
+        {/* While the dropdown is closed the same checkboxes stay in the form, hidden, so the picked
+            sizes are sent even before any script runs. */}
+        {open !== 'sizes' && <div hidden>{sizeFields}</div>}
+
+        {/* Brand kit: a ring in the kit's colours, pressed while the kit is in use. */}
+        <Popover.Root open={open === 'kit'} onOpenChange={toggle('kit')}>
+          <Tooltip label={useKit ? k.on : k.off}>
+            <Popover.Trigger asChild>
+              <button
+                type="button"
+                aria-label={h.brandKit}
+                aria-pressed={useKit}
+                className={cn(ROUND, useKit && 'border-accent bg-accent-soft')}
+                data-testid="brief-kit"
+              >
+                <span
+                  aria-hidden
+                  className={cn('relative size-[18px] rounded-full', !ring && 'border-[3px] border-line-strong')}
+                  style={ring ? { background: ring } : undefined}
+                >
+                  {ring && (
+                    <span
+                      className={cn(
+                        'absolute inset-[4px] rounded-full',
+                        useKit ? 'bg-[color-mix(in_oklab,var(--surface)_80%,var(--accent))]' : 'bg-surface',
+                      )}
+                    />
+                  )}
+                </span>
+              </button>
+            </Popover.Trigger>
+          </Tooltip>
+          <Popover.Content
+            align="start"
+            sideOffset={8}
+            collisionPadding={16}
+            aria-label={h.brandKit}
+            className={cn(PANEL, 'w-[min(20rem,calc(100vw-2rem))] p-3')}
+            data-testid="brief-kit-panel"
+          >
+            <div className="flex items-center gap-2 px-1">
+              <span className="flex min-w-0 flex-1 items-baseline gap-2">
+                <span className="shrink-0 font-display text-card font-bold">{h.brandKit}</span>
+                <span className="truncate text-tiny font-medium text-muted">{brandName}</span>
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={useKit}
+                aria-label={k.use}
+                onClick={() => setUseKit(!useKit)}
+                className={cn(
+                  'relative h-5 w-9 shrink-0 cursor-pointer rounded-full transition-colors duration-[var(--chrome-fast)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                  useKit ? 'bg-accent-solid' : 'bg-line-strong',
+                )}
+              >
+                <span
+                  aria-hidden
+                  className={cn(
+                    'absolute top-0.5 size-4 rounded-full bg-white shadow transition-[inset-inline-start] duration-[var(--chrome-fast)]',
+                    useKit ? 'start-[18px]' : 'start-0.5',
+                  )}
+                />
+              </button>
+            </div>
+            {kitEmpty ? (
+              <div className="flex flex-col items-start gap-2.5 px-1 pt-3">
+                <p className="text-tiny text-muted">{k.empty}</p>
+                <button
+                  type="button"
+                  onClick={openKitPanel}
+                  className={cn(buttonStyles({ variant: 'primary' }), 'h-9 px-4 font-semibold')}
+                  data-testid="brief-kit-set-up"
+                >
+                  <PaletteIcon size={15} aria-hidden />
+                  {k.setUp}
+                </button>
+              </div>
+            ) : (
+              <div
+                className={cn(
+                  'transition-opacity duration-[var(--chrome-fast)]',
+                  !useKit && 'pointer-events-none opacity-45',
+                )}
+                aria-disabled={!useKit || undefined}
+              >
+                {kit.logoAssetId && (
+                  <KitSection label={k.logo}>
+                    <button
+                      type="button"
+                      aria-pressed={logo}
+                      disabled={!useKit}
+                      onClick={() => setLogo(!logo)}
+                      className={cn(ROW, 'px-1')}
+                    >
+                      <span
+                        className={cn(
+                          'size-10 shrink-0 overflow-hidden rounded-[8px] border bg-well',
+                          logo ? 'border-accent' : 'border-line',
+                        )}
+                      >
+                        <img
+                          src={assetThumbnail(workspaceId, brandId, kit.logoAssetId)}
+                          alt=""
+                          className="size-full object-contain"
+                        />
+                      </span>
+                      <span className="flex-1 text-muted">{k.logo}</span>
+                      <Tick on={logo} />
+                    </button>
+                  </KitSection>
+                )}
+                {kit.colors.length > 0 && (
+                  <KitSection label={k.colors}>
+                    <div className="grid grid-cols-4 gap-1.5 px-1">
+                      {kit.colors.map((c) => {
+                        const on = !offColors.has(c.token)
+                        return (
+                          <button
+                            key={c.token}
+                            type="button"
+                            aria-pressed={on}
+                            aria-label={c.name}
+                            title={c.name}
+                            disabled={!useKit}
+                            onClick={() => setOffColors(flip(offColors, c.token))}
+                            data-token={c.token}
+                            className="group flex min-w-0 cursor-pointer flex-col items-center gap-1 rounded-row py-1 focus-visible:outline-2 focus-visible:outline-ring"
+                          >
+                            <span
+                              aria-hidden
+                              className={cn(
+                                'size-7 rounded-full border border-white/15 transition-shadow',
+                                on && 'shadow-[0_0_0_2px_var(--surface),0_0_0_4px_var(--accent)]',
+                              )}
+                              style={{ backgroundColor: c.value }}
+                            />
+                            <span
+                              aria-hidden
+                              className={cn(
+                                'w-full truncate text-center text-micro',
+                                on ? 'text-text' : 'text-subtle line-through',
+                              )}
+                            >
+                              {c.name}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </KitSection>
+                )}
+                {kit.fonts.length > 0 && (
+                  <KitSection label={k.fonts}>
+                    {kit.fonts.map((f) => (
+                      <button
+                        key={f.token}
+                        type="button"
+                        aria-pressed={!offFonts.has(f.token)}
+                        disabled={!useKit}
+                        onClick={() => setOffFonts(flip(offFonts, f.token))}
+                        className={cn(ROW, 'px-1 py-1.5')}
+                        data-token={f.token}
+                      >
+                        <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+                          <span className="truncate font-semibold">{f.family}</span>
+                          <span className="shrink-0 text-tiny text-muted">{f.name}</span>
+                        </span>
+                        <Tick on={!offFonts.has(f.token)} />
+                      </button>
+                    ))}
+                  </KitSection>
+                )}
+                {kit.voice.trim() && (
+                  <KitSection label={k.voice}>
+                    <button
+                      type="button"
+                      aria-pressed={voice}
+                      disabled={!useKit}
+                      onClick={() => setVoice(!voice)}
+                      className={cn(ROW, 'items-start px-1 py-1.5')}
+                    >
+                      <span className="line-clamp-2 min-w-0 flex-1 text-muted">{kit.voice}</span>
+                      <Tick on={voice} />
+                    </button>
+                  </KitSection>
+                )}
+                <p
+                  className="mt-2.5 border-t border-line px-1 pt-2.5 text-tiny text-muted tabular-nums"
+                  data-testid="brief-kit-summary"
+                >
+                  {format(k.summary, {
+                    colors: colors.length,
+                    allColors: kit.colors.length,
+                    fonts: fonts.length,
+                    allFonts: kit.fonts.length,
+                  })}
+                </p>
+              </div>
+            )}
+            {!kitEmpty && (
+              <button
+                type="button"
+                onClick={openKitPanel}
+                className="mt-1.5 flex cursor-pointer items-center gap-1.5 px-1 text-tiny font-semibold text-accent-text hover:underline"
+                data-testid="brief-kit-edit"
+              >
+                <PaletteIcon size={13} aria-hidden />
+                {k.editKit}
+              </button>
+            )}
+          </Popover.Content>
+        </Popover.Root>
+
+        <button
+          type="submit"
+          title={h.makeHint}
+          className="ai-glow relative ms-auto inline-flex h-10 cursor-pointer items-center gap-2 overflow-hidden rounded-[12px] px-5 text-label font-semibold text-white shadow-panel transition-transform duration-[var(--chrome-fast)] active:scale-[0.97] motion-reduce:active:scale-100"
+        >
+          <span aria-hidden className="ai-sheen" />
+          <SparkleIcon size={16} weight="fill" aria-hidden />
+          {h.make}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+/** A size's outline in its proportions, at most `size` pixels on its long side. */
+function Shape({ id, size }: { id: string; size: number }) {
+  const preset = SIZE_PRESETS.find((p) => p.id === id)
+  if (!preset) return null
+  const scale = size / Math.max(preset.width, preset.height)
+  return (
+    <span
+      aria-hidden
+      className="block shrink-0 rounded-[2px] border-[1.5px] border-current"
+      style={{ width: Math.max(5, preset.width * scale), height: Math.max(5, preset.height * scale) }}
+    />
+  )
+}
+
+/** A thumbnail above the brief, its tag along the bottom and ✕ at the top end corner. */
+function Attachment({
+  name,
+  tag,
+  removeLabel,
+  onRemove,
+  failed = false,
+  testId,
+  children,
+}: {
+  name: string
+  tag: string
+  removeLabel: string
+  onRemove: () => void
+  failed?: boolean
+  testId: string
+  children: ReactNode
+}) {
+  return (
+    <li className="pop-in relative" title={name} data-testid={testId}>
+      <span
+        className={cn(
+          'relative grid size-16 place-items-center overflow-hidden rounded-[10px] border bg-hover',
+          failed ? 'border-danger' : 'border-line',
+        )}
+      >
+        {children}
+        <span
+          aria-hidden
+          className="absolute inset-x-0 bottom-0 truncate bg-[linear-gradient(to_top,rgb(0_0_0/0.7),transparent)] px-1 pt-2 pb-0.5 text-micro font-bold text-white"
+        >
+          {tag}
+        </span>
+      </span>
+      <span className="sr-only">{name}</span>
+      <button
+        type="button"
+        aria-label={removeLabel}
+        onClick={onRemove}
+        className="absolute -end-1.5 -top-1.5 grid size-5 cursor-pointer place-items-center rounded-full border border-line bg-raised text-subtle shadow-panel hover:text-text"
+      >
+        <XIcon size={10} weight="bold" aria-hidden />
+      </button>
+    </li>
+  )
+}
+
+/** One part of the kit: its small heading, then what can be picked. */
+function KitSection({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <section aria-label={label}>
+      <h3 className={LABEL}>{label}</h3>
+      {children}
+    </section>
+  )
+}

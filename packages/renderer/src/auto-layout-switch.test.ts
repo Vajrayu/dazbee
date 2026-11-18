@@ -1,0 +1,187 @@
+// Switching a box to auto layout at the commands seam (#46): node.autoLayout reads the settings
+// off where the children are, so every child is where it was once laid out, and the linked
+// copies in the other frame stay as they were.
+import { describe, expect, it } from 'vitest'
+
+import { openSession, readDesign } from '@dazbee/doc'
+import { openTestStore } from '@dazbee/doc/test-store'
+import { type DesignInput, parseDesign } from '@dazbee/schema'
+
+import type { MeasureText } from './layout.ts'
+import { render, type SceneLayer } from './scene.ts'
+
+// Each character 10 wide, one line 20 tall.
+const measure: MeasureText = (props, width) => ({ width: width ?? props.text.length * 10, height: 20 })
+
+type Node = DesignInput['nodes'][string]
+const rect = (
+  parentId: string,
+  link: string,
+  index: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  more: Record<string, unknown> = {},
+): Node =>
+  ({
+    type: 'graphic',
+    parentId,
+    link,
+    index,
+    name: index,
+    props: { x, y, width, height, shape: { kind: 'rect' }, ...more },
+  }) as Node
+const label = (parentId: string, link: string, index: string, x: number, y: number, text: string): Node =>
+  ({
+    type: 'text',
+    parentId,
+    link,
+    index,
+    name: text,
+    props: {
+      x,
+      y,
+      width: text.length * 10,
+      height: 20,
+      text,
+      boxMode: 'autoWidth',
+      style: { fontFamily: 'Noto Sans', fontSize: 16, color: '#000000FF' },
+    },
+  }) as Node
+
+const design = (): DesignInput => ({
+  meta: { designId: 'd', name: 'Switch' },
+  pages: { p1: { name: 'Page 1', order: 'a0' } },
+  frames: {
+    sq: { pageId: 'p1', name: 'Square', width: 1080, height: 1080, x: 0, y: 0, order: 'a0' },
+    wide: { pageId: 'p1', name: 'Wide', width: 1200, height: 628, x: 1280, y: 0, order: 'a1' },
+  },
+  nodes: {
+    // A row centred across, 20 apart, its children out of order in the layer list.
+    bar: {
+      type: 'box',
+      parentId: 'sq',
+      link: 'bar',
+      index: 'a0',
+      name: 'Bar',
+      props: { x: 100, y: 100, width: 600, height: 200 },
+    },
+    big: rect('bar', 'big', 'a0', 300, 120, 100, 100),
+    small: rect('bar', 'small', 'a1', 120, 140, 100, 60),
+    word: label('bar', 'word', 'a2', 240, 160, 'Sale'),
+    badge: rect('bar', 'badge', 'a3', 650, 90, 30, 30, { absolute: true }),
+    // A column lined up at the end, 8 apart.
+    list: {
+      type: 'box',
+      parentId: 'sq',
+      link: 'list',
+      index: 'a1',
+      name: 'List',
+      props: { x: 100, y: 400, width: 300, height: 300 },
+    },
+    one: rect('list', 'one', 'a0', 180, 420, 200, 40),
+    two: rect('list', 'two', 'a1', 280, 468, 100, 40),
+    // In the wide frame the bar's copy sits elsewhere and its children are spread wider.
+    'wide-bar': {
+      type: 'box',
+      parentId: 'wide',
+      link: 'bar',
+      index: 'a0',
+      name: 'Bar',
+      props: { x: 500, y: 300, width: 600, height: 200 },
+    },
+    'wide-big': rect('wide-bar', 'big', 'a0', 740, 320, 100, 100),
+    'wide-small': rect('wide-bar', 'small', 'a1', 520, 340, 100, 60),
+    'wide-word': label('wide-bar', 'word', 'a2', 660, 360, 'Sale'),
+    'wide-badge': rect('wide-bar', 'badge', 'a3', 1050, 290, 30, 30, { absolute: true }),
+    'wide-list': {
+      type: 'box',
+      parentId: 'wide',
+      link: 'list',
+      index: 'a1',
+      name: 'List',
+      props: { x: 100, y: 400, width: 300, height: 300 },
+    },
+    'wide-one': rect('wide-list', 'one', 'a0', 180, 420, 200, 40),
+    'wide-two': rect('wide-list', 'two', 'a1', 280, 468, 100, 40),
+  },
+})
+
+function boxes(json: unknown, frameId: string) {
+  const parsed = parseDesign(json)
+  if (!parsed.success) throw new Error(parsed.errors.join('\n'))
+  const all = new Map<string, { x: number; y: number; width: number; height: number }>()
+  const walk = (layers: SceneLayer[]) =>
+    layers.forEach((l) => {
+      all.set(l.id, { x: l.props.x, y: l.props.y, width: l.props.width, height: l.props.height })
+      walk(l.children)
+    })
+  walk(render(parsed.design, frameId, undefined, measure).layers)
+  return all
+}
+
+/** Every layer of a frame within half a pixel of where it was. */
+function expectWhereTheyWere(json: unknown, frameId: string, before: ReturnType<typeof boxes>) {
+  const after = boxes(json, frameId)
+  for (const [id, was] of before) {
+    const now = after.get(id)
+    for (const key of ['x', 'y', 'width', 'height'] as const)
+      expect(Math.abs((now?.[key] ?? NaN) - was[key]), `${frameId} ${id}.${key}`).toBeLessThanOrEqual(0.5)
+  }
+}
+
+describe('node.autoLayout', () => {
+  it('lays the children out where they already were, in the one frame, within half a pixel', () => {
+    const parsed = parseDesign(design())
+    if (!parsed.success) throw new Error(parsed.errors.join('\n'))
+    const store = openTestStore(parsed.design)
+    const tab = openSession(store)
+    const before = readDesign(store)
+    const was = { sq: boxes(before, 'sq'), wide: boxes(before, 'wide') }
+    tab.gesture(() => {
+      tab.run('node.autoLayout', { id: 'bar', layout: 'auto' })
+      tab.run('node.autoLayout', { id: 'list', layout: 'auto' })
+    })
+    const d = readDesign(store)
+    expect(d.nodes.bar?.props).toMatchObject({
+      layout: { direction: 'row', gap: 20, align: 'center', padding: { left: 20, top: 20 } },
+    })
+    expect(d.nodes.list?.props).toMatchObject({
+      layout: { direction: 'column', gap: 8, align: 'end', padding: { right: 20, top: 20 } },
+    })
+    // The flow's order is the children's order on the frame; the absolute badge keeps its place.
+    const order = Object.entries(d.nodes)
+      .filter(([, n]) => n.parentId === 'bar')
+      .sort(([, a], [, b]) => (a.index < b.index ? -1 : 1))
+      .map(([id]) => id)
+    expect(order).toEqual(['small', 'word', 'big', 'badge'])
+    expectWhereTheyWere(d, 'sq', was.sq)
+    // The linked copies in the wide frame stay as they were.
+    for (const [id, node] of Object.entries(before.nodes)) if (id.startsWith('wide-')) expect(d.nodes[id]).toEqual(node)
+
+    // The wide frame's copy is switched on its own; its children are 40 apart there, so it gets its own gap.
+    tab.run('node.autoLayout', { id: 'wide-bar', layout: 'auto' })
+    const wide = readDesign(store)
+    expect(wide.nodes['wide-bar']?.props).toMatchObject({ layout: { direction: 'row', gap: 40 } })
+    expect(wide.nodes.bar?.props).toEqual(d.nodes.bar?.props)
+    expectWhereTheyWere(wide, 'wide', was.wide)
+
+    // One undo step takes each off again; Free takes it from the one layer.
+    tab.undo()
+    expect(readDesign(store).nodes['wide-bar']?.props).not.toHaveProperty('layout')
+    tab.undo()
+    expect(readDesign(store).nodes.bar?.props).not.toHaveProperty('layout')
+    tab.redo()
+    tab.redo()
+    // Going Free stores every layer where the flow draws it, so nothing moves.
+    const laidOut = boxes(readDesign(store), 'sq')
+    tab.run('node.autoLayout', { id: 'bar', layout: 'free', drawn: Object.fromEntries(laidOut) })
+    expect(readDesign(store).nodes.bar?.props).not.toHaveProperty('layout')
+    expectWhereTheyWere(readDesign(store), 'sq', laidOut)
+    expect(readDesign(store).nodes['wide-bar']?.props).toHaveProperty('layout')
+    expect(() => tab.run('node.autoLayout', { id: 'big', layout: 'auto' })).toThrow(
+      /"big" is a graphic; only boxes have auto layout/,
+    )
+  })
+})
