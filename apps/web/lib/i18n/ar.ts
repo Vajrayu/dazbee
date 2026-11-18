@@ -163,6 +163,8 @@ export const ar: Messages = {
       handOver: 'سلّم الملكية',
       handOverTo: 'سلّم الملكية إلى {name}',
       handOverConfirm: 'أتجعل {name} المالك؟ ستصبح مسؤولًا.',
+      makeAdmin: 'اجعله مسؤولًا',
+      makeAdminConfirm: 'أتجعل {name} مسؤولًا؟ سيرى كل العلامات التجارية.',
       cancel: 'إلغاء',
       refused: '{name}: {error}',
     },

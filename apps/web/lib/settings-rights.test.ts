@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { MEMBER_ROLES } from '@dazbee/schema'
 
 import {
+  asksBeforeRole,
   canAddBrand,
   canChange,
   canChangeTemplate,
@@ -88,6 +89,18 @@ describe('canLimit', () => {
       ['editor', true],
       ['reviewer', true],
     ])
+  })
+})
+
+describe('asksBeforeRole', () => {
+  it('asks before making a member limited to some brands an Admin, and before nothing else', () => {
+    const roles = ['admin', 'editor', 'reviewer'] as const
+    expect(roles.map((role) => [role, asksBeforeRole(['brand-1'], role), asksBeforeRole([], role)])).toEqual([
+      ['admin', true, true],
+      ['editor', false, false],
+      ['reviewer', false, false],
+    ])
+    expect(roles.map((role) => asksBeforeRole(null, role))).toEqual([false, false, false])
   })
 })
 

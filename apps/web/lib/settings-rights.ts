@@ -1,6 +1,13 @@
 // What a member's role lets them see and use outside the editor: Settings' controls, and the library's
 // controls that change something. The API refuses the same changes, so these only hide what can't apply.
-import { type MemberRole, roleLimitable, roleManages, roleWrites, type TemplateScope } from '@dazbee/schema'
+import {
+  type MemberBrands,
+  type MemberRole,
+  roleLimitable,
+  roleManages,
+  roleWrites,
+  type TemplateScope,
+} from '@dazbee/schema'
 
 /** The controls a row of This workspace's Members shows its viewer. */
 export interface RowControls {
@@ -44,6 +51,12 @@ export const canInvite = (role: MemberRole) => roleManages(role)
 
 /** Whether an invite or a member with the role shows the brands choice: an Editor or Reviewer. */
 export const canLimit = (role: MemberRole) => roleLimitable(role)
+
+/**
+ * Whether giving a member `role` asks first: a member limited to some brands (`brandIds` a list) made an
+ * Admin, who sees every brand. Moving between Editor and Reviewer keeps their brands, and asks nothing.
+ */
+export const asksBeforeRole = (brandIds: MemberBrands, role: MemberRole) => brandIds !== null && !roleLimitable(role)
 
 /** Whether the role sees Leave on its workspace: every role but the Owner, who hands over Owner first. */
 export const canLeave = (role: MemberRole) => role !== 'owner'

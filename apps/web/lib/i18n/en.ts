@@ -188,6 +188,9 @@ export const en = {
       handOver: 'Hand over Owner',
       handOverTo: 'Hand over Owner to {name}',
       handOverConfirm: 'Make {name} the Owner? You become an Admin.',
+      /** Making a member limited to some brands an Admin, which gives them every brand. */
+      makeAdmin: 'Make Admin',
+      makeAdminConfirm: 'Make {name} an Admin? They’ll see every brand.',
       cancel: 'Cancel',
       /** Why a change of the member named was refused. */
       refused: '{name}: {error}',
