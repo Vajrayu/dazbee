@@ -1,6 +1,6 @@
 // What a member's role lets them see and use outside the editor: Settings' controls, and the library's
 // controls that change something. The API refuses the same changes, so these only hide what can't apply.
-import { type MemberRole, roleLimitable, roleManages, roleWrites } from '@dazbee/schema'
+import { type MemberRole, roleLimitable, roleManages, roleWrites, type TemplateScope } from '@dazbee/schema'
 
 /** The controls a row of This workspace's Members shows its viewer. */
 export interface RowControls {
@@ -28,6 +28,13 @@ export const canChange = (role: MemberRole) => roleWrites(role)
  * who sees only the brands given to them can't add one.
  */
 export const canAddBrand = (role: MemberRole, limited: boolean) => roleWrites(role) && !limited
+
+/**
+ * Whether the role saves, renames and deletes a template for `scope`: every role but a Reviewer, and for
+ * every brand (`workspace`) only one not `limited` to some brands, since every brand shares that template.
+ */
+export const canChangeTemplate = (role: MemberRole, limited: boolean, scope: TemplateScope) =>
+  roleWrites(role) && (scope === 'brand' || !limited)
 
 /**
  * Whether the role sees This workspace's Invite and its pending invites, whose links let anyone in:

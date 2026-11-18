@@ -237,4 +237,31 @@ describe('a limited member', () => {
       404,
     )
   })
+
+  it(
+    'starts a design from a workspace template, but can’t save, rename or delete one',
+    { timeout: 60_000 },
+    async () => {
+      const save = (as: string, scope: string) =>
+        call(as, 'POST', `/brands/${sibling.id}/templates`, { name: 'Shared', scope, content: blank })
+      const shared = TemplateSummary.parse((await save('a', 'workspace')).json)
+      const editor = await addPerson([[workspace.id, 'editor', [sibling.id]]])
+      const refused = { error: 'A member limited to some brands can’t change a template for every brand' }
+      const ofShared = `/brands/${sibling.id}/templates/${shared.id}`
+
+      expect(await save(editor.as, 'workspace')).toEqual({ status: 403, json: refused })
+      expect(await call(editor.as, 'PATCH', ofShared, { name: 'Mine' })).toEqual({ status: 403, json: refused })
+      expect(await call(editor.as, 'DELETE', ofShared)).toEqual({ status: 403, json: refused })
+      expect((await call(editor.as, 'POST', `${ofShared}/designs`, {})).status).toBe(201)
+      // The refused changes left it as it was.
+      const listed = TemplateSummary.array().parse((await call('a', 'GET', `/brands/${sibling.id}/templates`)).json)
+      expect(listed.find((t) => t.id === shared.id)?.name).toBe('Shared')
+
+      // Their brand's own templates they save, rename and delete.
+      const own = TemplateSummary.parse((await save(editor.as, 'brand')).json)
+      const ofOwn = `/brands/${sibling.id}/templates/${own.id}`
+      expect((await call(editor.as, 'PATCH', ofOwn, { name: 'Mine' })).status).toBe(200)
+      expect((await call(editor.as, 'DELETE', ofOwn)).status).toBe(204)
+    },
+  )
 })

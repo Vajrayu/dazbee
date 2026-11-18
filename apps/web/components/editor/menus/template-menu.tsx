@@ -1,8 +1,8 @@
 'use client'
 
 // Save as template (#54): the design as the editor holds it now, named, for every brand of the
-// workspace or this brand alone. The template keeps its own copy; editing this design later
-// leaves it as it was.
+// workspace or this brand alone; for this brand alone, with no choice, for a member limited to some
+// brands. The template keeps its own copy; editing this design later leaves it as it was.
 import Link from 'next/link'
 import { useState } from 'react'
 
@@ -28,6 +28,7 @@ export function TemplateForm({
   brandName,
   designName,
   everyBrand,
+  forEveryBrand,
 }: {
   id: string
   editor: Editor
@@ -36,6 +37,8 @@ export function TemplateForm({
   brandName: string
   designName: string
   everyBrand: string
+  /** Whether it offers every brand; else it saves for this brand alone. */
+  forEveryBrand: boolean
 }) {
   const t = useMessages()
   const [name, setName] = useState(designName)
@@ -100,17 +103,24 @@ export function TemplateForm({
               className="h-8 rounded-row border border-line bg-raised px-2 text-small focus:border-accent focus:outline-none"
             />
           </label>
-          <fieldset className="flex flex-col">
-            <legend className={cn(LABEL, 'mb-1.5')}>{t.editor.templates.for}</legend>
-            <label className={CHOICE}>
-              <input type="radio" name="scope" checked={scope === 'brand'} onChange={() => setScope('brand')} />
-              {format(t.editor.templates.onlyBrand, { brand: brandName })}
-            </label>
-            <label className={CHOICE}>
-              <input type="radio" name="scope" checked={scope === 'workspace'} onChange={() => setScope('workspace')} />
-              {everyBrand}
-            </label>
-          </fieldset>
+          {forEveryBrand && (
+            <fieldset className="flex flex-col">
+              <legend className={cn(LABEL, 'mb-1.5')}>{t.editor.templates.for}</legend>
+              <label className={CHOICE}>
+                <input type="radio" name="scope" checked={scope === 'brand'} onChange={() => setScope('brand')} />
+                {format(t.editor.templates.onlyBrand, { brand: brandName })}
+              </label>
+              <label className={CHOICE}>
+                <input
+                  type="radio"
+                  name="scope"
+                  checked={scope === 'workspace'}
+                  onChange={() => setScope('workspace')}
+                />
+                {everyBrand}
+              </label>
+            </fieldset>
+          )}
           <Button type="submit" variant="primary" disabled={saving || !name.trim()} data-testid="template-save">
             {saving ? t.editor.templates.saving : t.editor.templates.save}
           </Button>

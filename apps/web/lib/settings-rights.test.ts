@@ -5,6 +5,7 @@ import { MEMBER_ROLES } from '@dazbee/schema'
 import {
   canAddBrand,
   canChange,
+  canChangeTemplate,
   canInvite,
   canLeave,
   canLimit,
@@ -45,6 +46,25 @@ describe('canAddBrand', () => {
       ['admin', true, false],
       ['editor', true, false],
       ['reviewer', false, false],
+    ])
+  })
+})
+
+describe('canChangeTemplate', () => {
+  it('lets every role but a Reviewer change a brand’s templates, and only an unlimited one the templates for every brand', () => {
+    expect(
+      MEMBER_ROLES.map((role) => [
+        role,
+        canChangeTemplate(role, false, 'brand'),
+        canChangeTemplate(role, true, 'brand'),
+        canChangeTemplate(role, false, 'workspace'),
+        canChangeTemplate(role, true, 'workspace'),
+      ]),
+    ).toEqual([
+      ['owner', true, true, true, false],
+      ['admin', true, true, true, false],
+      ['editor', true, true, true, false],
+      ['reviewer', false, false, false, false],
     ])
   })
 })

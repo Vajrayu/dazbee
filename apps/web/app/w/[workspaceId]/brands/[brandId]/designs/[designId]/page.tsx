@@ -5,8 +5,9 @@ import { AccountMenu } from '@/components/library/account-menu.tsx'
 import { brandPath } from '@/lib/brand-routes.ts'
 import { brandWords } from '@/lib/i18n/index.ts'
 import { getMessages } from '@/lib/i18n/server.ts'
-import { findDesign, getMe } from '@/lib/server/api.ts'
+import { findDesign, getAccess, getMe } from '@/lib/server/api.ts'
 import { SESSION_COOKIE } from '@/lib/server/sign-in.ts'
+import { canChangeTemplate } from '@/lib/settings-rights.ts'
 
 import { EditorStage } from './stage.tsx'
 
@@ -25,11 +26,12 @@ export default async function EditPage({
     designId !== designId.toLowerCase()
   )
     redirect(brandPath(workspaceId.toLowerCase(), brandId.toLowerCase(), 'designs', designId.toLowerCase()))
-  const [found, me, t, jar] = await Promise.all([
+  const [found, me, t, jar, { role, limited }] = await Promise.all([
     findDesign(workspaceId, brandId, designId),
     getMe(),
     getMessages(),
     cookies(),
+    getAccess(workspaceId),
   ])
   if (!found) notFound()
   return (
@@ -40,6 +42,7 @@ export default async function EditPage({
       brandId={found.brand.id}
       brandName={found.brand.name}
       everyBrand={brandWords(t).all}
+      forEveryBrand={canChangeTemplate(role, limited, 'workspace')}
       syncUrl={process.env.NEXT_PUBLIC_SYNC_URL ?? 'ws://localhost:1234'}
       account={
         <AccountMenu

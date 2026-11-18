@@ -41,6 +41,7 @@ export function ShareMenu({
   brandName,
   designName,
   everyBrand,
+  forEveryBrand,
   viewOnly = false,
 }: {
   editor: Editor
@@ -50,6 +51,8 @@ export function ShareMenu({
   designName: string
   /** How this workspace says "every brand": "All clients" in an agency (ADR-0011). */
   everyBrand: string
+  /** Whether Save as template offers every brand, which a member limited to some brands can't save for. */
+  forEveryBrand: boolean
   /** The tab may only view (C35): Share holds Export alone. */
   viewOnly?: boolean
 }) {
@@ -167,6 +170,7 @@ export function ShareMenu({
           brandName={brandName}
           designName={designName}
           everyBrand={everyBrand}
+          forEveryBrand={forEveryBrand}
         />
       )}
     </div>
