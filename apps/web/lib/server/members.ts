@@ -37,9 +37,12 @@ export const resendInvite = (workspaceId: string, inviteId: string) =>
 export const revokeInvite = (workspaceId: string, inviteId: string) =>
   call(z.null(), invitePath(workspaceId, inviteId), { method: 'DELETE' })
 
-/** Changes another member's role, as an Owner or Admin. */
-export const changeMemberRole = (workspaceId: string, userId: string, role: UpdateMember['role']) =>
-  call(WorkspaceMember, memberPath(workspaceId, userId), { method: 'PATCH', body: { role } satisfies UpdateMember })
+/**
+ * Changes another member's role or the brands they may see (a list, or null for every brand), as an Owner
+ * or Admin.
+ */
+export const changeMember = (workspaceId: string, userId: string, change: z.input<typeof UpdateMember>) =>
+  call(WorkspaceMember, memberPath(workspaceId, userId), { method: 'PATCH', body: change })
 
 /** Removes another member, as an Owner or Admin. */
 export const removeMember = (workspaceId: string, userId: string) =>

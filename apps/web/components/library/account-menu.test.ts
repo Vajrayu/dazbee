@@ -42,4 +42,10 @@ describe('AccountRows', () => {
       'href="/w/workspace-1/settings"',
     )
   })
+
+  it('names the brand it was opened on, so an invite from Settings starts at that brand', () => {
+    expect(
+      html(createElement(AccountRows, { workspaceId: 'workspace-1', brandId: 'brand 1', signedIn: true })),
+    ).toContain('href="/w/workspace-1/settings?brand=brand%201"')
+  })
 })

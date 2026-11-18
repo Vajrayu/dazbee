@@ -1,5 +1,5 @@
 {
-  "id": "13126737-03b7-4122-a1c7-22c03c037911",
+  "id": "55be6403-f22d-4bc4-a2b6-236b43e8db97",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1012,6 +1012,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "brand_ids": {
+          "name": "brand_ids",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "invited_by": {
           "name": "invited_by",
           "type": "text",
@@ -1128,6 +1134,77 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.membership_brands": {
+      "name": "membership_brands",
+      "schema": "",
+      "columns": {
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "brand_id": {
+          "name": "brand_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "membership_brands_membership": {
+          "name": "membership_brands_membership",
+          "tableFrom": "membership_brands",
+          "tableTo": "memberships",
+          "columnsFrom": [
+            "workspace_id",
+            "user_id"
+          ],
+          "columnsTo": [
+            "workspace_id",
+            "user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "membership_brands_brand_in_workspace": {
+          "name": "membership_brands_brand_in_workspace",
+          "tableFrom": "membership_brands",
+          "tableTo": "brands",
+          "columnsFrom": [
+            "brand_id",
+            "workspace_id"
+          ],
+          "columnsTo": [
+            "id",
+            "workspace_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "membership_brands_workspace_id_user_id_brand_id_pk": {
+          "name": "membership_brands_workspace_id_user_id_brand_id_pk",
+          "columns": [
+            "workspace_id",
+            "user_id",
+            "brand_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.memberships": {
       "name": "memberships",
       "schema": "",
@@ -1162,6 +1239,13 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
+        },
+        "limited": {
+          "name": "limited",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         }
       },
       "indexes": {

@@ -96,12 +96,18 @@ export async function findMe() {
 export const getMe = cache(() => call(Me, '/me'))
 
 /**
- * The person's role in the workspace, from `getMe`. A workspace not among theirs gives a Reviewer's role,
- * the one with the fewest rights.
+ * The person's role in the workspace and whether they are limited to some of its brands, from `getMe`. A
+ * workspace not among theirs gives the fewest rights: a Reviewer's role, limited.
  */
-export async function getRole(workspaceId: string): Promise<MemberRole> {
+export async function getAccess(workspaceId: string): Promise<{ role: MemberRole; limited: boolean }> {
   const id = workspaceId.toLowerCase()
-  return (await getMe()).workspaces.find((workspace) => workspace.id === id)?.role ?? 'reviewer'
+  const theirs = (await getMe()).workspaces.find((workspace) => workspace.id === id)
+  return theirs ? { role: theirs.role, limited: theirs.limited } : { role: 'reviewer', limited: true }
+}
+
+/** The person's role in the workspace, as `getAccess` gives it. */
+export async function getRole(workspaceId: string): Promise<MemberRole> {
+  return (await getAccess(workspaceId)).role
 }
 
 /**

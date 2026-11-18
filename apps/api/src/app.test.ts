@@ -1,12 +1,13 @@
 // What holds on every route of the app, against Postgres from Docker Compose
 // (`docker compose up -d --wait postgres`): a Reviewer changes nothing, a workspace is hidden from anyone
-// who is not its member, and the one error mapping. A design or template the API stored is valid, so
-// `createDesign` is made to refuse one here to reach the routes that copy stored content into a new design.
+// who is not its member, a brand from a member limited to others, and the one error mapping. A design or
+// template the API stored is valid, so `createDesign` is made to refuse one here to reach the routes that
+// copy stored content into a new design.
 import { describe, expect, it, vi } from 'vitest'
 
-import { ApiError, DesignSummary, TemplateSummary } from '@dazbee/schema'
+import { ApiError, BrandSummary, DesignSummary, TemplateSummary } from '@dazbee/schema'
 
-import { app, brand, call, request, workspace } from './test-api.ts'
+import { addPerson, app, brand, call, request, sibling, workspace } from './test-api.ts'
 import { createDesign, InvalidContent } from './workspace/designs.ts'
 
 vi.mock('./workspace/designs.ts', async (importOriginal) => {
@@ -158,6 +159,36 @@ describe('workspaces', () => {
       if (status !== 404 || ApiError.parse(json).error !== 'No such workspace') answered.push(`${route}: ${status}`)
     }
     expect(answered).toEqual([])
+  })
+})
+
+describe('brand limits', () => {
+  it('answers an Editor limited to another brand "No such brand" on every route of a brand, whatever route is added later', async () => {
+    const limited = await addPerson([[workspace.id, 'editor', [sibling.id]]])
+    const brandRoutes = IN_A_WORKSPACE.filter((route) => route.includes('/brands/:brandId'))
+    expect(brandRoutes).toEqual(
+      expect.arrayContaining([
+        'GET /workspaces/:workspaceId/brands/:brandId/kit',
+        'POST /workspaces/:workspaceId/brands/:brandId/designs/:designId/sync-token',
+      ]),
+    )
+    const answered = []
+    for (const route of brandRoutes) {
+      const { status, json } = await callRoute(limited.as, route)
+      if (status !== 404 || ApiError.parse(json).error !== 'No such brand') answered.push(`${route}: ${status}`)
+    }
+    expect(answered).toEqual([])
+  })
+
+  it('lists a limited Editor only their brands, and refuses them a new brand with 403', async () => {
+    const limited = await addPerson([[workspace.id, 'editor', [sibling.id]]])
+    expect(BrandSummary.array().parse((await call(limited.as, 'GET', '/brands')).json)).toEqual([
+      { id: sibling.id, name: sibling.name },
+    ])
+    const refused = await call(limited.as, 'POST', '/brands', { name: 'Mine' })
+    expect(refused).toEqual({ status: 403, json: { error: 'A member limited to some brands can’t add one' } })
+    // Unlimited, the same Editor sees and adds brands.
+    expect(BrandSummary.array().parse((await call('editor', 'GET', '/brands')).json).length).toBeGreaterThan(1)
   })
 })
 

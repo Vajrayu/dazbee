@@ -1,18 +1,46 @@
-// The workspace, its members and their roles, and its brands, always read and written within one
-// workspace, and which of a person's workspaces to open: the one they used last.
-import { and, asc, eq, sql } from 'drizzle-orm'
+// The workspace, its members with their roles and the brands each may see, and its brands, always read
+// and written within one workspace, and which of a person's workspaces to open: the one they used last.
+import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 
-import { brands, type Db, memberships, newId, users, workspaces } from '@dazbee/db'
+import { brands, type Db, memberships, newId, type Tx, users, workspaces } from '@dazbee/db'
 import {
   type BrandSummary,
   MEMBER_ROLES,
+  type MemberBrands,
   type MemberRole,
   type UpdateWorkspace,
   type WorkspaceMember,
   type WorkspaceSummary,
 } from '@dazbee/schema'
 
+/** A person's role in a workspace, and the brands they may see there: a list, or null for every brand. */
+export interface MemberAccess {
+  role: MemberRole
+  brandIds: MemberBrands
+}
+
 const workspaceSummary = { id: workspaces.id, name: workspaces.name }
+
+/**
+ * The brands a membership may see: a limited member's rows of `membership_brands`, empty when they have
+ * none, or null for one who isn't limited, whose rows are never read.
+ */
+// Written with its tables named, since a query of one table names its columns bare, which in the inner
+// select would mean `membership_brands`' own.
+const brandIdsOf = sql<MemberBrands>`case when "memberships"."limited" then array(
+  select "mb"."brand_id" from "membership_brands" "mb"
+  where "mb"."workspace_id" = "memberships"."workspace_id" and "mb"."user_id" = "memberships"."user_id"
+  order by "mb"."brand_id"
+) end`
+
+/** A member as the members list shows them. */
+const memberColumns = {
+  id: users.id,
+  name: users.name,
+  email: users.email,
+  role: memberships.role,
+  brandIds: brandIdsOf,
+}
 
 /** A membership's role as its place in MEMBER_ROLES, from Owner to Reviewer. */
 const roleRank = sql`array_position(array[${sql.join(
@@ -25,22 +53,25 @@ export async function findWorkspace(db: Db, workspaceId: string): Promise<Worksp
   return row ?? null
 }
 
-/** The person's role in the workspace, or null when they are not a member of it. */
-export async function findRole(db: Db, workspaceId: string, userId: string): Promise<MemberRole | null> {
+/** The person's role in the workspace and the brands they may see there, or null when they are not a member of it. */
+export async function findAccess(db: Db, workspaceId: string, userId: string): Promise<MemberAccess | null> {
   const [row] = await db
-    .select({ role: memberships.role })
+    .select({ role: memberships.role, brandIds: brandIdsOf })
     .from(memberships)
     .where(and(eq(memberships.workspaceId, workspaceId), eq(memberships.userId, userId)))
-  return row?.role ?? null
+  return row ?? null
 }
 
-/** Every member of the workspace, by role from Owner to Reviewer, then in the order they joined. */
-export async function listMembers(db: Db, workspaceId: string): Promise<WorkspaceMember[]> {
+/**
+ * Every member of the workspace with the brands each may see, by role from Owner to Reviewer, then in the
+ * order they joined; only `userId`'s when given.
+ */
+export async function listMembers(db: Db | Tx, workspaceId: string, userId?: string): Promise<WorkspaceMember[]> {
   return db
-    .select({ id: users.id, name: users.name, email: users.email, role: memberships.role })
+    .select(memberColumns)
     .from(memberships)
     .innerJoin(users, eq(users.id, memberships.userId))
-    .where(eq(memberships.workspaceId, workspaceId))
+    .where(and(eq(memberships.workspaceId, workspaceId), userId ? eq(memberships.userId, userId) : undefined))
     .orderBy(roleRank, asc(memberships.createdAt), asc(users.id))
 }
 
@@ -76,11 +107,13 @@ export async function updateWorkspace(
   return row ?? null
 }
 
-export async function listBrands(db: Db, workspaceId: string): Promise<BrandSummary[]> {
+/** The workspace's brands, by name; only those of `brandIds` when given, a limited member's. */
+export async function listBrands(db: Db, workspaceId: string, brandIds: MemberBrands = null): Promise<BrandSummary[]> {
+  if (brandIds?.length === 0) return []
   return db
     .select({ id: brands.id, name: brands.name })
     .from(brands)
-    .where(eq(brands.workspaceId, workspaceId))
+    .where(and(eq(brands.workspaceId, workspaceId), brandIds ? inArray(brands.id, brandIds) : undefined))
     .orderBy(asc(brands.name), asc(brands.id))
 }
 

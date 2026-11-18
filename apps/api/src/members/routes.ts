@@ -1,7 +1,8 @@
-// The routes of a workspace's members and invites: every member may read the members, and anyone but
-// the Owner leaves; only an Owner or Admin changes a member's role or removes them, and only the Owner
-// hands over Owner; only an Owner or Admin reads the pending invites, whose links let anyone in, and
-// invites, resends or revokes. Each is mounted under the workspace it is for.
+// The routes of a workspace's members and invites: every member may read the members, a limited one seeing
+// only their own brands of each, and anyone but the Owner leaves; only an Owner or Admin changes a member's
+// role or brands or removes them, and only the Owner hands over Owner; only an Owner or Admin reads the
+// pending invites, whose links let anyone in, and invites, resends or revokes. Each is mounted under the
+// workspace it is for.
 import { type Context, Hono } from 'hono'
 
 import type { Db } from '@dazbee/db'
@@ -9,9 +10,10 @@ import { CreateInvite, type Invite, UpdateMember, type WorkspaceMember } from '@
 
 import { body, type Env, error, requireManager } from '../http.ts'
 import { listMembers } from '../workspace/workspace.ts'
+import { seenBy } from './brand-limits.ts'
 import { findInviter, inviteMember, listInvites, resendInvite, revokeInvite } from './invites.ts'
 import { invitesProviderFor, type InvitesProviders } from './invites-provider.ts'
-import { changeRole, handOverOwner, leaveWorkspace, removeMember } from './members.ts'
+import { changeMember, handOverOwner, leaveWorkspace, removeMember } from './members.ts'
 
 export function memberRoutes({ db, invites }: { db: Db; invites: InvitesProviders }): Hono<Env> {
   const app = new Hono<Env>()
@@ -26,14 +28,15 @@ export function memberRoutes({ db, invites }: { db: Db; invites: InvitesProvider
   const notSetUp = (c: Context<Env>) => c.json(error('Invites are not set up for this workspace'), 404)
   const noSuchInvite = (c: Context<Env>) => c.json(error('No such invite'), 404)
 
-  app.get('/members', async (c) =>
-    c.json((await listMembers(db, c.var.membership.workspaceId)) satisfies WorkspaceMember[]),
-  )
+  app.get('/members', async (c) => {
+    const { workspaceId, brandIds } = c.var.membership
+    return c.json(seenBy(brandIds, await listMembers(db, workspaceId)) satisfies WorkspaceMember[])
+  })
 
   app.patch('/members/:userId', requireManager, async (c) => {
     const input = await body(c.req.raw, UpdateMember)
     if (input instanceof Response) return input
-    return c.json((await changeRole(db, actorOf(c), c.req.param('userId'), input)) satisfies WorkspaceMember)
+    return c.json((await changeMember(db, actorOf(c), c.req.param('userId'), input)) satisfies WorkspaceMember)
   })
 
   app.delete('/members/:userId', requireManager, async (c) => {

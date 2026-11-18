@@ -1,8 +1,9 @@
 'use client'
 
 // The round avatar at the top end, as in the final mock: the person's own initials, opening to
-// Settings and Sign out, so the top bar keeps to the work and one action. In the editor its menu
-// stands over the edit panel: Esc closes it first, and never clears the selection.
+// Settings, which on a brand's pages names that brand, and Sign out, so the top bar keeps to the work and
+// one action. In the editor its menu stands over the edit panel: Esc closes it first, and never clears the
+// selection.
 import Link from 'next/link'
 import { useId, useState } from 'react'
 
@@ -17,11 +18,14 @@ const ROW = `flex h-10 w-full cursor-pointer items-center gap-3 rounded-row px-3
 
 export function AccountMenu({
   workspaceId,
+  brandId,
   name,
   signedIn,
 }: {
   /** The workspace whose Settings the menu opens. */
   workspaceId: string
+  /** The brand whose page it is on, which Settings' Invite starts at. */
+  brandId?: string | undefined
   /** The person's name, shown as the avatar's initials. */
   name: string
   /** Whether there is a session to end, so Sign out shows (#58). */
@@ -55,19 +59,35 @@ export function AccountMenu({
           data-testid="account"
           className="pop-in-end absolute end-0 top-full z-40 mt-2 flex w-56 flex-col gap-0.5 rounded-card surface-frost p-1.5"
         >
-          <AccountRows workspaceId={workspaceId} signedIn={signedIn} />
+          <AccountRows workspaceId={workspaceId} brandId={brandId} signedIn={signedIn} />
         </div>
       )}
     </div>
   )
 }
 
-/** What the open menu holds: Settings, and Sign out while there is a session to end. */
-export function AccountRows({ workspaceId, signedIn }: { workspaceId: string; signedIn: boolean }) {
+/**
+ * What the open menu holds: Settings, with the brand it is opened on, and Sign out while there is a
+ * session to end.
+ */
+export function AccountRows({
+  workspaceId,
+  brandId,
+  signedIn,
+}: {
+  workspaceId: string
+  brandId?: string | undefined
+  signedIn: boolean
+}) {
   const t = useMessages()
+  const settings = workspacePath(workspaceId, 'settings')
   return (
     <>
-      <Link href={workspacePath(workspaceId, 'settings')} className={ROW} data-testid="settings-link">
+      <Link
+        href={brandId ? `${settings}?brand=${encodeURIComponent(brandId)}` : settings}
+        className={ROW}
+        data-testid="settings-link"
+      >
         <GearSixIcon size={18} aria-hidden className="text-muted" />
         {t.account.settings}
       </Link>

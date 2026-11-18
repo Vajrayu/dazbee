@@ -18,8 +18,11 @@ export const showsBrandList = (brands: readonly BrandSummary[]) => brands.length
 /** Whether the crumb starts with the workspace and a menu of the person's workspaces: once there are two. */
 export const showsWorkspaceList = (workspaces: readonly WorkspaceSummary[]) => workspaces.length > 1
 
-/** The app opens on onboarding (#109) until the workspace has a brand. */
-export const needsWelcome = (brands: readonly BrandSummary[]) => brands.length === 0
+/**
+ * The app opens on onboarding (#109) until the workspace has a brand; never for a member limited to some
+ * brands, whose page says they have none yet.
+ */
+export const needsWelcome = (brands: readonly BrandSummary[], limited: boolean) => brands.length === 0 && !limited
 
 /** The page an old ?show= panel link means now, or null. */
 export const brandPage = (show: string | undefined): BrandPage | null => (show ? (FROM_PANEL[show] ?? null) : null)

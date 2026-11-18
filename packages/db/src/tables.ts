@@ -4,6 +4,7 @@
 import { sql } from 'drizzle-orm'
 import {
   bigint,
+  boolean,
   check,
   customType,
   foreignKey,
@@ -63,6 +64,9 @@ export const memberships = pgTable(
     createdAt: createdAt(),
     // When the person last opened the workspace, so sign-in opens it again; null until their first visit.
     lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+    // Whether the member sees only the brands in their membership_brands rows, none when there are none;
+    // only an Editor or Reviewer is limited.
+    limited: boolean().notNull().default(false),
   },
   (t) => [
     primaryKey({ columns: [t.workspaceId, t.userId] }),
@@ -90,6 +94,8 @@ export const invites = pgTable(
     /** Lower-cased. */
     email: text().notNull(),
     role: text({ enum: INVITE_ROLES }).notNull(),
+    /** The brands the invite limits its Editor or Reviewer to; null for every brand. */
+    brandIds: jsonb('brand_ids').$type<string[]>(),
     /** Who invited; null once that person is gone. */
     invitedBy: text('invited_by').references(() => users.id, { onDelete: 'set null' }),
     /** The invite's id with its provider: WorkOS's invitation, or the development stand-in's; null while being sent. */
@@ -120,6 +126,32 @@ export const brands = pgTable(
     index('brands_workspace').on(t.workspaceId),
     // Lets designs require that their brand belongs to their workspace.
     unique('brands_id_workspace').on(t.id, t.workspaceId),
+  ],
+)
+
+/**
+ * A brand a limited member may see, one row each. It goes with the membership or the brand, so a
+ * member's limit never names a brand that is gone.
+ */
+export const membershipBrands = pgTable(
+  'membership_brands',
+  {
+    workspaceId: text('workspace_id').notNull(),
+    userId: text('user_id').notNull(),
+    brandId: text('brand_id').notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.workspaceId, t.userId, t.brandId] }),
+    foreignKey({
+      name: 'membership_brands_membership',
+      columns: [t.workspaceId, t.userId],
+      foreignColumns: [memberships.workspaceId, memberships.userId],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'membership_brands_brand_in_workspace',
+      columns: [t.brandId, t.workspaceId],
+      foreignColumns: [brands.id, brands.workspaceId],
+    }).onDelete('cascade'),
   ],
 )
 

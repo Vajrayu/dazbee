@@ -31,7 +31,11 @@ describe("the crumb's workspace part", () => {
 
 describe('onboarding (#109)', () => {
   it('opens on onboarding until there is a brand', () => {
-    expect(needsWelcome([])).toBe(true)
-    expect(needsWelcome([brand('a')])).toBe(false)
+    expect(needsWelcome([], false)).toBe(true)
+    expect(needsWelcome([brand('a')], false)).toBe(false)
+  })
+
+  it('never opens on onboarding for a member limited to some brands, who has none to add', () => {
+    expect(needsWelcome([], true)).toBe(false)
   })
 })

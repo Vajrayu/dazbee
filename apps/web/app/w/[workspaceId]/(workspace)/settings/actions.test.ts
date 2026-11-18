@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { changeRole, handOver, invite, leave, remove, resend, revoke } from './actions.ts'
+import { changeBrands, changeRole, handOver, invite, leave, remove, resend, revoke } from './actions.ts'
 
 /** The language the person picked, if any, and the cookies deleted; held where the hoisted cookie stub reads them. */
 const picked = vi.hoisted(() => ({ locale: undefined as string | undefined, deleted: [] as string[] }))
@@ -25,6 +25,7 @@ const INVITE = {
   id: 'invite-1',
   email: 'ada@example.com',
   role: 'editor',
+  brandIds: null,
   expiresAt: '2099-01-08T00:00:00.000Z',
   link: 'http://localhost:3000/dev/accept?invite=provider-1',
 }
@@ -35,9 +36,13 @@ let asked: { method: string; path: string; body: unknown }[]
 let answer: { status: number; body: unknown }
 let answers: Record<string, { status: number; body: unknown }>
 
-const form = (fields: Record<string, string>) => {
+/** A member as the API answers with them. */
+const MEMBER = { id: 'user-2', name: 'Ada', email: 'ada@example.com', role: 'reviewer', brandIds: null }
+
+/** A form with each field, and a field given a list once for each of its values. */
+const form = (fields: Record<string, string | string[]>) => {
   const data = new FormData()
-  for (const [name, value] of Object.entries(fields)) data.set(name, value)
+  for (const [name, value] of Object.entries(fields)) for (const each of [value].flat()) data.append(name, each)
   return data
 }
 
@@ -68,10 +73,40 @@ describe('invite', () => {
     const answered = await invite('WORKSPACE-1', null, form({ email: ' Ada@Example.com ', role: 'editor' }))
 
     expect(asked).toEqual([
-      { method: 'POST', path: '/workspaces/workspace-1/invites', body: { email: 'ada@example.com', role: 'editor' } },
+      {
+        method: 'POST',
+        path: '/workspaces/workspace-1/invites',
+        body: { email: 'ada@example.com', role: 'editor', brandIds: null },
+      },
     ])
     expect(answered).toEqual({ sent: 'ada@example.com' })
     expect(revalidatePath).toHaveBeenCalledWith('/w/WORKSPACE-1/settings')
+  })
+
+  it('invites an Editor or Reviewer with the brands ticked under Chosen brands, and an Admin with every brand', async () => {
+    const chosen = { email: 'ada@example.com', brands: 'chosen', brand: ['brand-1', 'brand-2'] }
+    await invite('workspace-1', null, form({ ...chosen, role: 'reviewer' }))
+    await invite('workspace-1', null, form({ ...chosen, role: 'admin' }))
+    await invite('workspace-1', null, form({ ...chosen, brands: 'all', role: 'editor' }))
+    expect(asked.map((request) => request.body)).toEqual([
+      { email: 'ada@example.com', role: 'reviewer', brandIds: ['brand-1', 'brand-2'] },
+      { email: 'ada@example.com', role: 'admin', brandIds: null },
+      { email: 'ada@example.com', role: 'editor', brandIds: null },
+    ])
+  })
+
+  it('asks nothing of the API for Chosen brands with none ticked, and says so in the person’s words', async () => {
+    picked.locale = 'ar'
+    const answered = await invite(
+      'workspace-1',
+      null,
+      form({ email: 'ada@example.com', role: 'editor', brands: 'chosen' }),
+    )
+    expect(answered).toEqual({
+      error: 'اختر علامة تجارية واحدة على الأقل، أو اختر كل العلامات التجارية.',
+      field: 'brands',
+    })
+    expect(asked).toEqual([])
   })
 
   it("says why the API refused, in the person's words: an email that is a member, a person no longer an Owner or Admin, an invite being sent", async () => {
@@ -186,7 +221,7 @@ describe('revoke', () => {
 
 describe('changeRole', () => {
   it('asks the API for the member’s new role, and shows the members as they now are', async () => {
-    answer = { status: 200, body: { id: 'user-2', name: 'Ada', email: 'ada@example.com', role: 'reviewer' } }
+    answer = { status: 200, body: MEMBER }
 
     expect(await changeRole('workspace-1', 'user-2', 'reviewer')).toBeNull()
     expect(asked).toEqual([
@@ -207,6 +242,35 @@ describe('changeRole', () => {
     ] as const) {
       answer = { status, body: { error } }
       expect(await changeRole('workspace-1', 'user-2', 'admin')).toBe(words)
+    }
+  })
+})
+
+describe('changeBrands', () => {
+  it('asks the API for the member’s brands, a list or every brand, and shows the members as they now are', async () => {
+    answer = { status: 200, body: MEMBER }
+
+    expect(await changeBrands('workspace-1', 'user-2', ['brand-1'])).toBeNull()
+    expect(await changeBrands('workspace-1', 'user-2', null)).toBeNull()
+    expect(asked).toEqual([
+      { method: 'PATCH', path: '/workspaces/workspace-1/members/user-2', body: { brandIds: ['brand-1'] } },
+      { method: 'PATCH', path: '/workspaces/workspace-1/members/user-2', body: { brandIds: null } },
+    ])
+    expect(revalidatePath).toHaveBeenCalledWith('/w/workspace-1/settings')
+  })
+
+  it("says why the API refused, in the person's words: brands that can't be given, no longer allowed, or no longer a member", async () => {
+    for (const [status, error, words] of [
+      [
+        400,
+        'Only an Editor or Reviewer can be limited to some brands',
+        'These brands can’t be given now. Reload to see this member’s role and the brands.',
+      ],
+      [403, 'Only an Owner or Admin can do this', 'You can’t change this member now. Reload to see what you can do.'],
+      [404, 'No such member', 'This person is no longer a member.'],
+    ] as const) {
+      answer = { status, body: { error } }
+      expect(await changeBrands('workspace-1', 'user-2', ['brand-1'])).toBe(words)
     }
   })
 })

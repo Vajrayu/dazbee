@@ -41,7 +41,14 @@ export default async function EditPage({
       brandName={found.brand.name}
       everyBrand={brandWords(t).all}
       syncUrl={process.env.NEXT_PUBLIC_SYNC_URL ?? 'ws://localhost:1234'}
-      account={<AccountMenu workspaceId={workspaceId} name={me.name || me.email} signedIn={jar.has(SESSION_COOKIE)} />}
+      account={
+        <AccountMenu
+          workspaceId={workspaceId}
+          brandId={found.brand.id}
+          name={me.name || me.email}
+          signedIn={jar.has(SESSION_COOKIE)}
+        />
+      }
     />
   )
 }

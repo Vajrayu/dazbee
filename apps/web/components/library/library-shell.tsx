@@ -17,9 +17,9 @@ import { cn } from '@/lib/cn.ts'
 import { showsWorkspaceList } from '@/lib/home.ts'
 import type { BrandWords, Messages } from '@/lib/i18n/index.ts'
 import { initialsOf } from '@/lib/initials.ts'
-import { getMe, getRole } from '@/lib/server/api.ts'
+import { getAccess, getMe } from '@/lib/server/api.ts'
 import { SESSION_COOKIE } from '@/lib/server/sign-in.ts'
-import { canChange } from '@/lib/settings-rights.ts'
+import { canAddBrand } from '@/lib/settings-rights.ts'
 
 import { AccountMenu } from './account-menu.tsx'
 import { type CapsuleLink, LibraryCapsule } from './library-capsule.tsx'
@@ -56,7 +56,8 @@ export async function LibraryShell({
   children: ReactNode
 }) {
   const active = brands.find((brand) => brand.id === activeBrandId)
-  const canAdd = canChange(await getRole(workspace.id))
+  const { role, limited } = await getAccess(workspace.id)
+  const canAdd = canAddBrand(role, limited)
   const placeName = {
     home: t.library.home,
     brands: words.title,
@@ -77,7 +78,7 @@ export async function LibraryShell({
         </div>
       )}
 
-      <LibraryHeader t={t} workspace={workspace}>
+      <LibraryHeader t={t} workspace={workspace} brandId={active?.id}>
         {/* One brand and nothing to add: the menu would offer only the brand you are on, so it is its name. */}
         {showBrands || canAdd ? (
           (showBrands || active) && (
@@ -169,11 +170,14 @@ export function LibraryFrame({
 export async function LibraryHeader({
   t,
   workspace,
+  brandId,
   children,
 }: {
   t: Messages
   /** The workspace, for the mark's link, the crumb and the account menu. */
   workspace: WorkspaceSummary
+  /** The brand whose page it is, which the account menu's Settings names. */
+  brandId?: string | undefined
   /** The crumb after the workspace's part. */
   children: ReactNode
 }) {
@@ -199,7 +203,12 @@ export async function LibraryHeader({
         {children}
       </div>
       <span className="ms-auto">
-        <AccountMenu workspaceId={workspace.id} name={me.name || me.email} signedIn={jar.has(SESSION_COOKIE)} />
+        <AccountMenu
+          workspaceId={workspace.id}
+          brandId={brandId}
+          name={me.name || me.email}
+          signedIn={jar.has(SESSION_COOKIE)}
+        />
       </span>
     </header>
   )
@@ -207,7 +216,7 @@ export async function LibraryHeader({
 
 /**
  * The crumb's brand part: the brand you are in, or the word for them all, with a menu of the
- * workspace's brands that ends with New brand for a member who may add one. A <details>, so it opens
+ * brands the member sees that ends with New brand for a member who may add one. A <details>, so it opens
  * before any script loads.
  */
 function BrandSwitcher({

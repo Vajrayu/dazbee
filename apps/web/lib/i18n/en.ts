@@ -28,6 +28,8 @@ export const en = {
     cancel: 'Cancel',
     designCount: { one: '{n} design', other: '{n} designs' } as Counted,
     noDesignsCount: 'No designs yet',
+    /** The Brands page of a member limited to some brands who has none. */
+    noBrands: { title: 'No brands for you yet', line: 'Ask the Owner of this workspace to give you a brand.' },
     moreFor: 'More for {name}',
     rename: 'Rename',
     duplicate: 'Duplicate',
@@ -214,6 +216,21 @@ export const en = {
       sent: 'Invite sent to {email}. Its link is under Pending invites.',
       badEmail: 'Enter an email address, such as ada@example.com.',
     },
+    /**
+     * The brands an Editor or Reviewer may see, in an invite and on a member's row: every brand, or the
+     * brands ticked.
+     */
+    brands: {
+      label: 'Brands',
+      of: 'Brands {name} may see',
+      all: 'All brands',
+      chosen: 'Chosen brands',
+      /** A limited member none of whose brands are the viewer's, or whose brands are gone. */
+      none: 'No brands',
+      /** What goes between the names of a member's brands. */
+      comma: ', ',
+      noneChosen: 'Tick at least one brand, or pick All brands.',
+    },
     pending: {
       title: 'Pending invites',
       expires: 'Expires {date}',
@@ -240,6 +257,7 @@ export const en = {
       notOwner: 'Only the Owner can hand over Owner. Reload to see what you can do.',
       notAdmin: 'Only an Admin can be made Owner. Reload to see their role now.',
       handOverFirst: 'Hand over Owner to an Admin before you leave.',
+      brandsRefused: 'These brands can’t be given now. Reload to see this member’s role and the brands.',
     },
   },
   editor: {

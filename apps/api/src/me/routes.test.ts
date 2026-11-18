@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 import { Me } from '@dazbee/schema'
 
-import { call, other, personBoth, request, workspace } from '../test-api.ts'
+import { addPerson, brand, call, other, personBoth, request, workspace } from '../test-api.ts'
 
 const me = async (as: string) => Me.parse((await request(as, 'GET', '/me')).json)
 /** Opens the workspace's page as the person in both workspaces. */
@@ -17,11 +17,22 @@ describe('GET /me', () => {
       name: 'Bea Both',
       email: personBoth.email,
       workspaces: [
-        { ...workspace, role: 'editor' },
-        { ...other, role: 'editor' },
+        { ...workspace, role: 'editor', limited: false },
+        { ...other, role: 'editor', limited: false },
       ],
       open: other.id,
     })
+  })
+
+  it('says where the person is limited to some brands', async () => {
+    const limited = await addPerson([
+      [workspace.id, 'reviewer', [brand.id]],
+      [other.id, 'editor'],
+    ])
+    expect((await me(limited.as)).workspaces).toEqual([
+      { ...workspace, role: 'reviewer', limited: true },
+      { ...other, role: 'editor', limited: false },
+    ])
   })
 
   it('opens the workspace used last', async () => {

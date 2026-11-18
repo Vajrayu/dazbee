@@ -120,6 +120,7 @@ CREATE TABLE "invites" (
 	"workspace_id" text NOT NULL,
 	"email" text NOT NULL,
 	"role" text NOT NULL,
+	"brand_ids" jsonb,
 	"invited_by" text,
 	"provider_invite_id" text,
 	"link" text,
@@ -129,12 +130,20 @@ CREATE TABLE "invites" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "membership_brands" (
+	"workspace_id" text NOT NULL,
+	"user_id" text NOT NULL,
+	"brand_id" text NOT NULL,
+	CONSTRAINT "membership_brands_workspace_id_user_id_brand_id_pk" PRIMARY KEY("workspace_id","user_id","brand_id")
+);
+--> statement-breakpoint
 CREATE TABLE "memberships" (
 	"workspace_id" text NOT NULL,
 	"user_id" text NOT NULL,
 	"role" text NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"last_used_at" timestamp with time zone,
+	"limited" boolean DEFAULT false NOT NULL,
 	CONSTRAINT "memberships_workspace_id_user_id_pk" PRIMARY KEY("workspace_id","user_id")
 );
 --> statement-breakpoint
@@ -184,6 +193,8 @@ ALTER TABLE "font_faces" ADD CONSTRAINT "font_faces_workspace_id_workspaces_id_f
 ALTER TABLE "font_faces" ADD CONSTRAINT "font_faces_brand_in_workspace" FOREIGN KEY ("brand_id","workspace_id") REFERENCES "public"."brands"("id","workspace_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "invites" ADD CONSTRAINT "invites_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "invites" ADD CONSTRAINT "invites_invited_by_users_id_fk" FOREIGN KEY ("invited_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "membership_brands" ADD CONSTRAINT "membership_brands_membership" FOREIGN KEY ("workspace_id","user_id") REFERENCES "public"."memberships"("workspace_id","user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "membership_brands" ADD CONSTRAINT "membership_brands_brand_in_workspace" FOREIGN KEY ("brand_id","workspace_id") REFERENCES "public"."brands"("id","workspace_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "memberships" ADD CONSTRAINT "memberships_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "memberships" ADD CONSTRAINT "memberships_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "templates" ADD CONSTRAINT "templates_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint

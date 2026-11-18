@@ -49,11 +49,23 @@ afterEach(() => {
 })
 
 describe('the members', () => {
-  it('lists every member of the workspace with their name, email and role, Owner first, for any member', async () => {
+  it('lists every member of the workspace with their name, email, role and brands, Owner first, for any member', async () => {
     const members = WorkspaceMember.array().parse((await call('r', 'GET', '/members')).json)
     expect(members.map((m) => m.role)).toEqual(['owner', 'admin', 'editor', 'editor', 'reviewer'])
-    expect(members[0]).toEqual({ id: personA.id, name: 'Ann Archer', email: personA.email, role: 'owner' })
-    expect(members).toContainEqual({ id: personBoth.id, name: 'Bea Both', email: personBoth.email, role: 'editor' })
+    expect(members[0]).toEqual({
+      id: personA.id,
+      name: 'Ann Archer',
+      email: personA.email,
+      role: 'owner',
+      brandIds: null,
+    })
+    expect(members).toContainEqual({
+      id: personBoth.id,
+      name: 'Bea Both',
+      email: personBoth.email,
+      role: 'editor',
+      brandIds: null,
+    })
     const theirs = WorkspaceMember.array().parse((await call('b', 'GET', '/members')).json)
     expect(theirs.map((m) => m.role)).toEqual(['owner', 'editor'])
   })

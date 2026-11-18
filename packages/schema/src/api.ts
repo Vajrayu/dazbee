@@ -31,13 +31,14 @@ export type UpdateWorkspace = z.infer<typeof UpdateWorkspace>
 
 /**
  * The signed-in person: their id, name and email, the workspaces they are a member of, by name, with their role
- * in each, and the workspace to open: the one used last, else the first joined, else null when there is none.
+ * in each and whether they are limited to some of its brands there, and the workspace to open: the one used
+ * last, else the first joined, else null when there is none.
  */
 export const Me = z.object({
   id: RecordId,
   name: z.string(),
   email: z.string(),
-  workspaces: z.array(WorkspaceSummary.extend({ role: MemberRole })),
+  workspaces: z.array(WorkspaceSummary.extend({ role: MemberRole, limited: z.boolean() })),
   open: RecordId.nullable(),
 })
 export type Me = z.infer<typeof Me>
@@ -398,6 +399,11 @@ export function roleWrites(role: MemberRole): boolean {
 /** Whether a member with `role` manages the workspace itself, such as renaming it: an Owner or Admin. */
 export function roleManages(role: MemberRole): boolean {
   return role === 'owner' || role === 'admin'
+}
+
+/** Whether a member with `role` can be limited to some of the workspace's brands: an Editor or Reviewer. */
+export function roleLimitable(role: MemberRole): boolean {
+  return role === 'editor' || role === 'reviewer'
 }
 
 /**

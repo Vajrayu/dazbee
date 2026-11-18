@@ -1,11 +1,11 @@
 'use client'
 
 // This workspace's Invite, for an Owner or Admin: an email, the role it gives (Admin, Editor or Reviewer,
-// a line under them saying what the one picked may do) and Invite. What the API answered shows under the
-// form: to whom the invite was sent, or why it wasn't.
-import { useActionState, useState } from 'react'
+// a line under them saying what the one picked may do), for an Editor or Reviewer the brands they may see,
+// and Invite. What the API answered shows under the form: to whom the invite was sent, or why it wasn't.
+import { startTransition, useActionState, useState } from 'react'
 
-import { INVITE_ROLES, type InviteRole } from '@dazbee/schema'
+import { type BrandSummary, INVITE_ROLES, type InviteRole } from '@dazbee/schema'
 
 import { invite, type InviteAnswer } from '@/app/w/[workspaceId]/(workspace)/settings/actions.ts'
 import { buttonStyles } from '@/components/ui/button.tsx'
@@ -15,12 +15,28 @@ import { Radio, RadioGroup } from '@/components/ui/radio-group.tsx'
 import { cn } from '@/lib/cn.ts'
 import { useMessages } from '@/lib/i18n/client.tsx'
 import { format } from '@/lib/i18n/index.ts'
+import { canLimit } from '@/lib/settings-rights.ts'
 
-export function InviteForm({ workspaceId }: { workspaceId: string }) {
+import { BrandsChoice, type BrandsPick } from './brands-choice.tsx'
+
+export function InviteForm({
+  workspaceId,
+  brands,
+  fromBrand,
+}: {
+  workspaceId: string
+  /** The workspace's brands, to choose from. */
+  brands: BrandSummary[]
+  /** The brand Settings was opened from, which the brands choice starts at; else it starts at All brands. */
+  fromBrand?: string | undefined
+}) {
   const t = useMessages().settings
   const w = t.invite
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<InviteRole>('editor')
+  const [pick, setPick] = useState<BrandsPick>(() =>
+    fromBrand ? { all: false, ticked: [fromBrand] } : { all: true, ticked: [] },
+  )
   // The email stays as typed when the invite is refused, to fix and send again, and empties once it is sent.
   const [answer, send, sending] = useActionState<InviteAnswer, FormData>(async (before, form) => {
     const answered = await invite(workspaceId, before, form)
@@ -29,8 +45,20 @@ export function InviteForm({ workspaceId }: { workspaceId: string }) {
   }, null)
   // Whom an invite was sent to shows until the next email is typed; a refusal, until it is sent again.
   const shown = answer && ('error' in answer || !email) ? answer : null
+  const emailRefused = shown !== null && 'error' in shown && shown.field !== 'brands'
   return (
-    <form action={send} aria-labelledby="invite-title" data-testid="invite-form" className="mt-7 flex flex-col gap-2">
+    // Sent from the submit event rather than as the form's action, since React resets a form after its
+    // action, and the reset would put the role and brands chosen back to where they started.
+    <form
+      onSubmit={(event) => {
+        event.preventDefault()
+        const form = new FormData(event.currentTarget)
+        startTransition(() => send(form))
+      }}
+      aria-labelledby="invite-title"
+      data-testid="invite-form"
+      className="mt-7 flex flex-col gap-2"
+    >
       <h3 id="invite-title" className="text-label font-medium">
         {w.title}
       </h3>
@@ -45,8 +73,8 @@ export function InviteForm({ workspaceId }: { workspaceId: string }) {
           aria-label={w.email}
           placeholder={w.emailPlaceholder}
           autoComplete="off"
-          aria-invalid={shown && 'error' in shown ? true : undefined}
-          aria-describedby={shown ? 'invite-answer' : undefined}
+          aria-invalid={emailRefused || undefined}
+          aria-describedby={shown && (emailRefused || !('error' in shown)) ? 'invite-answer' : undefined}
           className="h-11 min-w-0 flex-1 basis-64 rounded-row border border-line bg-bg px-3 text-card outline-none hover:border-line-strong focus:border-accent"
         />
         <input type="hidden" name="role" value={role} />
@@ -66,6 +94,15 @@ export function InviteForm({ workspaceId }: { workspaceId: string }) {
         </button>
       </div>
       <p className="text-label text-muted">{w.roleHints[role]}</p>
+      {canLimit(role) && (
+        <>
+          <input type="hidden" name="brands" value={pick.all ? 'all' : 'chosen'} />
+          {pick.ticked.map((id) => (
+            <input key={id} type="hidden" name="brand" value={id} />
+          ))}
+          <BrandsChoice brands={brands} pick={pick} onPick={setPick} />
+        </>
+      )}
       {shown && <Answer answer={shown} sentWords={w.sent} />}
     </form>
   )

@@ -1,14 +1,16 @@
-// A workspace's members changed by its members: an Owner or Admin changes another member's role or
-// removes them, never the Owner, and anyone but the Owner leaves. Each change reads the memberships it
-// rests on again, locked, in the transaction that writes it, so two changes at once never leave a
-// workspace with no Owner or two. Removing and leaving take the person out of the workspace's WorkOS
-// organization while their membership is locked, then delete it, so a failure there leaves them a member
-// and trying again works, and a second removal waits and then finds no such member.
+// A workspace's members changed by its members: an Owner or Admin changes another member's role or the brands
+// they may see, or removes them, never the Owner, and anyone but the Owner leaves. Each change reads the
+// memberships it rests on again, locked, in the transaction that writes it, so two changes at once never
+// leave a workspace with no Owner or two. Removing and leaving take the person out of the workspace's WorkOS
+// organization while their membership is locked, then delete it, so a failure there leaves them a member and
+// trying again works, and a second removal waits and then finds no such member.
 import { and, asc, eq, inArray } from 'drizzle-orm'
 
 import { type Db, memberships, type Tx, users, workspaces } from '@dazbee/db'
-import { type MemberRole, roleManages, type UpdateMember, type WorkspaceMember } from '@dazbee/schema'
+import { type MemberRole, roleLimitable, roleManages, type UpdateMember } from '@dazbee/schema'
 
+import { listMembers } from '../workspace/workspace.ts'
+import { checkLimit, writeLimit } from './brand-limits.ts'
 import { invitesProviderFor, type InvitesProviders } from './invites-provider.ts'
 
 /** Who asks for a change: the person, in the workspace the route is for. */
@@ -26,18 +28,29 @@ export class MemberRefusal extends Error {
   }
 }
 
-/** Changes another member's role, as an Owner or Admin; never the Owner's, and never their own. */
-export async function changeRole(db: Db, actor: Actor, userId: string, { role }: UpdateMember) {
+/**
+ * Changes another member's role or the brands they may see, or both, as an Owner or Admin; never the
+ * Owner's, and never their own. A member made an Admin sees every brand; one moved between Editor and
+ * Reviewer keeps their brands unless given others.
+ */
+export async function changeMember(db: Db, actor: Actor, userId: string, { role, brandIds }: UpdateMember) {
   return db.transaction(async (tx) => {
     const roles = await lockRoles(tx, actor, userId)
     const target = managed(roles, actor, userId)
     if (userId === actor.userId) throw new MemberRefusal(403, 'You can’t change your own role')
     if (target === 'owner') throw new MemberRefusal(403, 'The Owner’s role is changed only by handing over Owner')
-    await tx
-      .update(memberships)
-      .set({ role })
-      .where(and(eq(memberships.workspaceId, actor.workspaceId), eq(memberships.userId, userId)))
-    return memberOf(tx, actor.workspaceId, userId)
+    const next = role ?? target
+    if (brandIds !== undefined) await checkLimit(tx, actor.workspaceId, next, brandIds)
+    if (role)
+      await tx
+        .update(memberships)
+        .set({ role })
+        .where(and(eq(memberships.workspaceId, actor.workspaceId), eq(memberships.userId, userId)))
+    const limit = brandIds !== undefined ? brandIds : roleLimitable(next) ? undefined : null
+    if (limit !== undefined) await writeLimit(tx, actor.workspaceId, userId, limit)
+    const [member] = await listMembers(tx, actor.workspaceId, userId)
+    if (!member) throw new Error('the changed member is gone')
+    return member
   })
 }
 
@@ -97,17 +110,6 @@ function managed(roles: Map<string, MemberRole>, actor: Actor, userId: string): 
   const target = roles.get(userId)
   if (!target) throw new MemberRefusal(404, 'No such member')
   return target
-}
-
-/** The member as the members list shows them. */
-async function memberOf(tx: Tx, workspaceId: string, userId: string): Promise<WorkspaceMember> {
-  const [row] = await tx
-    .select({ id: users.id, name: users.name, email: users.email, role: memberships.role })
-    .from(memberships)
-    .innerJoin(users, eq(users.id, memberships.userId))
-    .where(and(eq(memberships.workspaceId, workspaceId), eq(memberships.userId, userId)))
-  if (!row) throw new Error('the changed member is gone')
-  return row
 }
 
 /**
