@@ -48,8 +48,10 @@ export function InviteForm({
   const emailRefused = shown !== null && 'error' in shown && shown.field !== 'brands'
   return (
     // Sent from the submit event rather than as the form's action, since React resets a form after its
-    // action, and the reset would put the role and brands chosen back to where they started.
+    // action, and the reset would put the role and brands chosen back to where they started. Before the
+    // scripts load the browser sends it itself, as a POST, so the email stays out of the address bar.
     <form
+      method="post"
       onSubmit={(event) => {
         event.preventDefault()
         const form = new FormData(event.currentTarget)
