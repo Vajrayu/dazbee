@@ -289,7 +289,7 @@ describe('the memberships table', () => {
     const ofAdmin = and(eq(memberships.workspaceId, workspace.id), eq(memberships.userId, admin.id))
     const refused = { cause: { constraint: 'memberships_limited_role' } }
     await expect(db.update(memberships).set({ limited: true }).where(ofAdmin)).rejects.toMatchObject(refused)
-    await expect(addPerson([[workspace.id, 'owner', [brand.id]]])).rejects.toMatchObject(refused)
+    await expect(addPerson([[workspace.id, 'admin', [brand.id]]])).rejects.toMatchObject(refused)
     // An Editor may be limited.
     const editor = await addPerson([[workspace.id, 'editor']])
     const ofEditor = and(eq(memberships.workspaceId, workspace.id), eq(memberships.userId, editor.id))

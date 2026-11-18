@@ -3,7 +3,7 @@
 // This workspace's Invite, for an Owner or Admin: an email, the role it gives (Admin, Editor or Reviewer,
 // a line under them saying what the one picked may do), for an Editor or Reviewer the brands they may see,
 // and Invite. What the API answered shows under the form: to whom the invite was sent, or why it wasn't.
-import { startTransition, useActionState, useState } from 'react'
+import { startTransition, useActionState, useState, useSyncExternalStore } from 'react'
 
 import { type BrandSummary, INVITE_ROLES, type InviteRole } from '@dazbee/schema'
 
@@ -18,6 +18,9 @@ import { format } from '@/lib/i18n/index.ts'
 import { canLimit } from '@/lib/settings-rights.ts'
 
 import { BrandsChoice, type BrandsPick } from './brands-choice.tsx'
+
+/** Nothing to listen to: whether the scripts have loaded never changes once they have. */
+const subscribeNever = () => () => {}
 
 export function InviteForm({
   workspaceId,
@@ -45,11 +48,19 @@ export function InviteForm({
   }, null)
   // Whom an invite was sent to shows until the next email is typed; a refusal, until it is sent again.
   const shown = answer && ('error' in answer || !email) ? answer : null
+  // False in the page as sent, true once its scripts run: Invite waits for them, so the browser never sends
+  // the form itself.
+  const loaded = useSyncExternalStore(
+    subscribeNever,
+    () => true,
+    () => false,
+  )
   const emailRefused = shown !== null && 'error' in shown && shown.field !== 'brands'
   return (
     // Sent from the submit event rather than as the form's action, since React resets a form after its
-    // action, and the reset would put the role and brands chosen back to where they started. Before the
-    // scripts load the browser sends it itself, as a POST, so the email stays out of the address bar.
+    // action, and the reset would put the role and brands chosen back to where they started. Invite waits for
+    // the scripts; were the form sent without them, it goes as a POST, so the email stays out of the address
+    // bar.
     <form
       method="post"
       onSubmit={(event) => {
@@ -89,7 +100,7 @@ export function InviteForm({
         </RadioGroup>
         <button
           type="submit"
-          disabled={sending}
+          disabled={sending || !loaded}
           className={cn(buttonStyles({ variant: 'primary', size: 'lg' }), 'h-11 px-7 font-semibold')}
         >
           {sending ? w.sending : w.send}

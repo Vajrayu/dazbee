@@ -21,7 +21,7 @@ import {
 import { changeBrands, changeRole, handOver, remove } from '@/app/w/[workspaceId]/(workspace)/settings/actions.ts'
 import { buttonStyles } from '@/components/ui/button.tsx'
 import { CaretDownIcon, CheckIcon } from '@/components/ui/icons.tsx'
-import { Menu, MenuItem, MenuRadio, MenuRadios } from '@/components/ui/menu.tsx'
+import { Menu, MenuRadio, MenuRadios } from '@/components/ui/menu.tsx'
 import { cn } from '@/lib/cn.ts'
 import { useMessages } from '@/lib/i18n/client.tsx'
 import { format } from '@/lib/i18n/index.ts'
@@ -29,7 +29,7 @@ import { initialsOf } from '@/lib/initials.ts'
 import { asksBeforeRole, canLimit, type RowControls, rowControls } from '@/lib/settings-rights.ts'
 
 import { brandsLabel, BrandsMenu } from './brands-choice.tsx'
-import { ConfirmMenu } from './confirm-menu.tsx'
+import { ConfirmMenu, ConfirmRows } from './confirm-menu.tsx'
 import { Note } from './note.tsx'
 
 /** A change a row makes to its member, which gives why the API refused it, or null. */
@@ -235,6 +235,8 @@ function RoleMenu({
   // The role picked that asks first, while the menu asks.
   const [asking, setAsking] = useState<InviteRole | null>(null)
   const label = format(m.roleOf, { name })
+  /** Whether picking `each` asks first, keeping the menu open on the question. */
+  const asks = (each: InviteRole) => each !== role && asksBeforeRole(brandIds, each)
   return (
     <Menu
       trigger={
@@ -262,13 +264,13 @@ function RoleMenu({
       className={asking ? 'w-72' : 'w-48'}
     >
       {asking ? (
-        <>
-          <p className="px-2.5 pt-1.5 pb-2 text-small leading-snug text-text [overflow-wrap:anywhere]">
-            {format(m.makeAdminConfirm, { name })}
-          </p>
-          <MenuItem label={m.makeAdmin} testId="role-confirm" onSelect={() => onPick(asking)} />
-          <MenuItem label={m.cancel} />
-        </>
+        <ConfirmRows
+          question={format(m.makeAdminConfirm, { name })}
+          confirm={m.makeAdmin}
+          cancel={m.cancel}
+          focus
+          onConfirm={() => onPick(asking)}
+        />
       ) : (
         <MenuRadios
           value={role}
@@ -276,18 +278,12 @@ function RoleMenu({
           onValueChange={(picked) => {
             const next = INVITE_ROLES.find((each) => each === picked)
             if (!next || next === role) return
-            if (asksBeforeRole(brandIds, next)) setAsking(next)
+            if (asks(next)) setAsking(next)
             else onPick(next)
           }}
         >
           {INVITE_ROLES.map((each) => (
-            <MenuRadio
-              key={each}
-              value={each}
-              label={s.roles[each]}
-              stayOpen={each !== role && asksBeforeRole(brandIds, each)}
-              data-role={each}
-            >
+            <MenuRadio key={each} value={each} label={s.roles[each]} stayOpen={asks(each)} data-role={each}>
               {s.roles[each]}
               <CheckIcon size={14} aria-hidden className="invisible shrink-0 group-aria-checked:visible" />
             </MenuRadio>

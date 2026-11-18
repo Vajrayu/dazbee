@@ -18,7 +18,9 @@ const html = () =>
   )
 
 describe('InviteForm', () => {
-  it('is sent as a POST before its scripts load, so the email never shows in the address bar', () => {
-    expect(html()).toMatch(/<form\b[^>]*\bmethod="post"/)
+  it('can’t be sent before its scripts load, and goes as a POST, so the email never shows in the address bar', () => {
+    const markup = html()
+    expect(markup).toMatch(/<form\b[^>]*\bmethod="post"/)
+    expect(markup).toMatch(/<button type="submit" disabled=""/)
   })
 })

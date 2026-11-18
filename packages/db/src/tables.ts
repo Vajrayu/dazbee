@@ -19,7 +19,7 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core'
 
-import { INVITE_ROLES, MEMBER_ROLES, VersionKind } from '@dazbee/schema'
+import { INVITE_ROLES, LIMITABLE_ROLES, MEMBER_ROLES, VersionKind } from '@dazbee/schema'
 
 const bytea = customType<{ data: Uint8Array; driverData: Buffer }>({
   dataType: () => 'bytea',
@@ -76,7 +76,10 @@ export const memberships = pgTable(
       .on(t.workspaceId)
       .where(sql`${t.role} = 'owner'`),
     // Only an Editor or Reviewer is limited to some brands; an Owner or Admin sees every brand.
-    check('memberships_limited_role', sql`not ${t.limited} or ${t.role} in ('editor', 'reviewer')`),
+    check(
+      'memberships_limited_role',
+      sql`not ${t.limited} or ${t.role} in (${sql.raw(LIMITABLE_ROLES.map((role) => `'${role}'`).join(', '))})`,
+    ),
   ],
 )
 

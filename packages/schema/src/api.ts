@@ -17,6 +17,9 @@ export const MEMBER_ROLES = ['owner', 'admin', 'editor', 'reviewer'] as const
 export const MemberRole = z.enum(MEMBER_ROLES)
 export type MemberRole = z.infer<typeof MemberRole>
 
+/** The roles that can be limited to some of the workspace's brands: an Editor or Reviewer. */
+export const LIMITABLE_ROLES = ['editor', 'reviewer'] as const satisfies readonly MemberRole[]
+
 export const WorkspaceSummary = z.object({
   id: RecordId,
   name: z.string(),
@@ -403,7 +406,7 @@ export function roleManages(role: MemberRole): boolean {
 
 /** Whether a member with `role` can be limited to some of the workspace's brands: an Editor or Reviewer. */
 export function roleLimitable(role: MemberRole): boolean {
-  return role === 'editor' || role === 'reviewer'
+  return (LIMITABLE_ROLES as readonly MemberRole[]).includes(role)
 }
 
 /**
