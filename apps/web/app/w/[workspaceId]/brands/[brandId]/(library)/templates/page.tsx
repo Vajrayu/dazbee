@@ -1,7 +1,8 @@
 // A brand's templates (#54), as the earlier mock's Templates page: chips for this brand's or every
 // brand's, then a card per template with its picture and name. Picking one starts a design from it;
 // each card's menu renames or deletes it (#159). A Reviewer sees the cards only: picking one starts
-// nothing, and there is no menu.
+// nothing, and there is no menu. A member limited to some brands starts from a template for every brand,
+// but its card has no menu.
 import { notFound } from 'next/navigation'
 
 import type { TemplateSummary } from '@dazbee/schema'
@@ -20,8 +21,8 @@ import { cn } from '@/lib/cn.ts'
 import { showsBrandList } from '@/lib/home.ts'
 import { brandWords, format } from '@/lib/i18n/index.ts'
 import { getMessages } from '@/lib/i18n/server.ts'
-import { getRole, getWorkspace, listBrands, listTemplates } from '@/lib/server/api.ts'
-import { canChange } from '@/lib/settings-rights.ts'
+import { getAccess, getWorkspace, listBrands, listTemplates } from '@/lib/server/api.ts'
+import { canChange, canChangeTemplate } from '@/lib/settings-rights.ts'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,11 +36,11 @@ export default async function TemplatesPage({
   searchParams: Promise<{ scope?: string }>
 }) {
   const [{ workspaceId, brandId }, { scope }] = await Promise.all([params, searchParams])
-  const [t, workspace, brands, role] = await Promise.all([
+  const [t, workspace, brands, { role, limited }] = await Promise.all([
     getMessages(),
     getWorkspace(workspaceId),
     listBrands(workspaceId),
-    getRole(workspaceId),
+    getAccess(workspaceId),
   ])
   const brand = brands.find((b) => b.id === brandId)
   if (!brand) notFound()
@@ -111,11 +112,13 @@ export default async function TemplatesPage({
                           {card}
                         </button>
                       </form>
-                      <TileMenu
-                        name={template.name}
-                        rename={renameTemplateAction.bind(null, workspaceId, brand.id, template.id)}
-                        remove={deleteTemplateAction.bind(null, workspaceId, brand.id, template.id)}
-                      />
+                      {canChangeTemplate(role, limited, template.scope) && (
+                        <TileMenu
+                          name={template.name}
+                          rename={renameTemplateAction.bind(null, workspaceId, brand.id, template.id)}
+                          remove={deleteTemplateAction.bind(null, workspaceId, brand.id, template.id)}
+                        />
+                      )}
                     </>
                   ) : (
                     <div className="flex flex-col gap-2">{card}</div>

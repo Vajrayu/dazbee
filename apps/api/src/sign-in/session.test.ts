@@ -47,7 +47,7 @@ describe('seedDevelopment', () => {
       id: DEV_USER.id,
       name: 'Development user',
       email: 'dev@localhost',
-      workspaces: [{ ...DEV_WORKSPACE, role: 'owner' }],
+      workspaces: [{ ...DEV_WORKSPACE, role: 'owner', limited: false }],
       open: DEV_WORKSPACE.id,
     })
   })

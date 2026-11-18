@@ -1,13 +1,15 @@
-// A workspace's invites: inviting an email (resending its pending invite, or replacing an expired one),
-// the pending ones, resending, revoking, and accepting one that its provider says the person accepted.
+// A workspace's invites: inviting an email with a role and brands (resending its pending invite, or
+// replacing an expired one), the pending ones, resending, revoking, and accepting one that its provider
+// says the person accepted.
 // An invite is being sent while it has no provider id yet, and pending once sent while it is neither
 // accepted nor revoked and its `expires_at` is ahead of `now`. The provider is never called inside a
 // transaction: a short transaction checks and reserves, the provider is called, then the row is written.
 import { and, asc, eq, gt, inArray, isNotNull, isNull, lte, sql } from 'drizzle-orm'
 
 import { type Db, invites, memberships, newId, type Tx, users, workspaces } from '@dazbee/db'
-import type { CreateInvite, Invite, InviteRole } from '@dazbee/schema'
+import type { CreateInvite, Invite, InviteRole, MemberBrands } from '@dazbee/schema'
 
+import { checkLimit, writeLimit } from './brand-limits.ts'
 import { inviteExpiry, type InvitesProvider, type ProviderInvite } from './invites-provider.ts'
 
 /** A pending invite of the person's email, with its workspace's WorkOS organization, for accepting. */
@@ -43,6 +45,7 @@ const inviteSummary = {
   id: invites.id,
   email: invites.email,
   role: invites.role,
+  brandIds: invites.brandIds,
   expiresAt: invites.expiresAt,
   link: sentLink,
 }
@@ -65,20 +68,22 @@ const sentFields = (invitation: ProviderInvite) => ({ link: invitation.link, exp
 const SENDING_MS = 60_000
 
 /**
- * Invites `email` to the inviter's workspace with `role`: refused for a member, a resend of its pending
- * invite with the role changed, or a new invite, any expired one revoked first. A new invite is reserved
- * first, under a lock on the workspace and email, as a row being sent; the provider is called after that
- * transaction, and the row is filled in, or deleted when sending fails. So two invites of one email never
- * send twice: the second finds the first being sent, or pending.
+ * Invites `email` to the inviter's workspace with `role` and `brandIds`: refused for a member or for brands
+ * that can't limit the role, a resend of its pending invite with the role and brands changed, or a new
+ * invite, any expired one revoked first. A new invite is reserved first, under a lock on the workspace and
+ * email, as a row being sent; the provider is called after that transaction, and the row is filled in, or
+ * deleted when sending fails. So two invites of one email never send twice: the second finds the first being
+ * sent, or pending.
  */
 export async function inviteMember(
   db: Db,
   provider: InvitesProvider,
   inviter: Inviter,
-  { email, role }: CreateInvite,
+  { email, role, brandIds }: CreateInvite,
   now = new Date(),
 ): Promise<Invite> {
   const { workspaceId } = inviter
+  await checkLimit(db, workspaceId, role, brandIds)
   if (await isMember(db, workspaceId, email)) throw new InvalidInvite(`${email} is already a member`)
   const ofEmail = and(eq(invites.workspaceId, workspaceId), eq(invites.email, email))
   const [expired, [waiting]] = await Promise.all([
@@ -96,7 +101,7 @@ export async function inviteMember(
   const expiredIds = expired.map((old) => old.id)
 
   if (waiting) {
-    const resent = await resendPending(db, provider, waiting, now, { role, revoke: expiredIds })
+    const resent = await resendPending(db, provider, waiting, now, { change: { role, brandIds }, revoke: expiredIds })
     if (!resent) throw new InviteConflict('This invite changed; try again')
     return resent
   }
@@ -120,6 +125,7 @@ export async function inviteMember(
       workspaceId,
       email,
       role,
+      brandIds,
       invitedBy: inviter.userId,
       expiresAt: inviteExpiry(now.getTime()),
       createdAt: now,
@@ -218,8 +224,8 @@ export async function waitingInvites(db: Db | Tx, email: string, now = new Date(
 }
 
 /**
- * Accepts a pending invite for the person: makes their membership with its role and marks it accepted,
- * in one transaction. False when it is no longer pending.
+ * Accepts a pending invite for the person: makes their membership with its role and brands and marks it
+ * accepted, in one transaction. False when it is no longer pending.
  */
 export async function acceptInvite(db: Db | Tx, inviteId: string, userId: string, now = new Date()): Promise<boolean> {
   return db.transaction(async (tx) => {
@@ -227,12 +233,14 @@ export async function acceptInvite(db: Db | Tx, inviteId: string, userId: string
       .update(invites)
       .set({ acceptedAt: now })
       .where(and(eq(invites.id, inviteId), pending(now)))
-      .returning({ workspaceId: invites.workspaceId, role: invites.role })
+      .returning({ workspaceId: invites.workspaceId, role: invites.role, brandIds: invites.brandIds })
     if (!accepted) return false
-    await tx
+    const [joined] = await tx
       .insert(memberships)
       .values({ workspaceId: accepted.workspaceId, userId, role: accepted.role })
       .onConflictDoNothing()
+      .returning({ userId: memberships.userId })
+    if (joined && accepted.brandIds) await writeLimit(tx, accepted.workspaceId, userId, accepted.brandIds)
     return true
   })
 }
@@ -262,8 +270,8 @@ async function revokeWithProvider(provider: InvitesProvider, id: string): Promis
 }
 
 /**
- * Sends a pending invite again, then writes its new link and expiry, with the new role when given, in a
- * transaction that also marks the given invites revoked. Null when it stopped being pending meanwhile,
+ * Sends a pending invite again, then writes its new link and expiry, with the new role and brands when
+ * given, in a transaction that also marks the given invites revoked. Null when it stopped being pending meanwhile,
  * revoked or accepted, whether the provider then refused to resend it or not.
  */
 async function resendPending(
@@ -271,7 +279,7 @@ async function resendPending(
   provider: InvitesProvider,
   waiting: { id: string; providerInviteId: string },
   now: Date,
-  { role, revoke = [] }: { role?: InviteRole; revoke?: string[] } = {},
+  { change = {}, revoke = [] }: { change?: { role?: InviteRole; brandIds?: MemberBrands }; revoke?: string[] } = {},
 ): Promise<Invite | null> {
   let invitation: ProviderInvite
   try {
@@ -282,7 +290,7 @@ async function resendPending(
   }
   return db.transaction(async (tx) => {
     await markRevoked(tx, revoke, now)
-    return updatePending(tx, waiting.id, { ...(role ? { role } : {}), ...sentFields(invitation) }, now)
+    return updatePending(tx, waiting.id, { ...change, ...sentFields(invitation) }, now)
   })
 }
 
@@ -300,7 +308,14 @@ async function markRevoked(tx: Tx, inviteIds: string[], now: Date): Promise<void
     .where(and(inArray(invites.id, inviteIds), open()))
 }
 
-function invite(row: { id: string; email: string; role: InviteRole; expiresAt: Date; link: string }): Invite {
+function invite(row: {
+  id: string
+  email: string
+  role: InviteRole
+  brandIds: MemberBrands
+  expiresAt: Date
+  link: string
+}): Invite {
   return { ...row, expiresAt: row.expiresAt.toISOString() }
 }
 
@@ -343,7 +358,7 @@ async function isPending(db: Db, inviteId: string, now: Date): Promise<boolean> 
 async function updatePending(
   tx: Tx,
   inviteId: string,
-  set: { role?: InviteRole; link?: string; expiresAt?: Date },
+  set: { role?: InviteRole; brandIds?: MemberBrands; link?: string; expiresAt?: Date },
   now: Date,
 ): Promise<Invite | null> {
   const [row] = await tx

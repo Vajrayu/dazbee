@@ -19,7 +19,7 @@ import type { Storage } from '@dazbee/storage'
 import { signSyncToken } from '@dazbee/sync-token'
 
 import { designCover, ensureDesignThumbnail } from '../drawing/design-thumbnails.ts'
-import { body, type Env, error, requireManager, requireWriter } from '../http.ts'
+import { body, type Env, error, requireManager, requireUnlimited, requireWriter } from '../http.ts'
 import { userName } from '../sign-in/session.ts'
 import { signedLink } from '../storage-keys.ts'
 import {
@@ -62,9 +62,12 @@ export function workspaceRoutes({ db }: { db: Db }): Hono<Env> {
 export function brandRoutes({ db, storage, syncSecret }: { db: Db; storage: Storage; syncSecret: string }): Hono<Env> {
   const app = new Hono<Env>()
 
-  app.get('/brands', async (c) => c.json(await listBrands(db, c.var.membership.workspaceId)))
+  app.get('/brands', async (c) => {
+    const { workspaceId, brandIds } = c.var.membership
+    return c.json(await listBrands(db, workspaceId, brandIds))
+  })
 
-  app.post('/brands', requireWriter, async (c) => {
+  app.post('/brands', requireWriter, requireUnlimited, async (c) => {
     const input = await body(c.req.raw, CreateBrand)
     if (input instanceof Response) return input
     return c.json(await createBrand(db, c.var.membership.workspaceId, input.name, input.website), 201)

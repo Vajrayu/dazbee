@@ -23,7 +23,7 @@ const me = (open: string | null) => ({
   id: 'user-1',
   name: 'Ada Lovelace',
   email: 'ada@example.com',
-  workspaces: open ? [{ id: open, name: 'Harbour', role: 'owner' as const }] : [],
+  workspaces: open ? [{ id: open, name: 'Harbour', role: 'owner' as const, limited: false }] : [],
   open,
 })
 

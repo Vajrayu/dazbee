@@ -1,19 +1,22 @@
 // What every area's routes share: the context they run in, the error body, reading a request's body,
 // the check that a request has a session, the membership of the workspace a route is for, the checks
-// that its role writes or manages the workspace, and the brand a brand route is for.
+// that its role writes or manages the workspace, and the brand a brand route is for, within the brands
+// the member may see.
 import type { MiddlewareHandler } from 'hono'
 import type { z } from 'zod'
 
 import type { Db } from '@dazbee/db'
-import { type ApiError, type BrandSummary, type MemberRole, roleManages, roleWrites } from '@dazbee/schema'
+import { type ApiError, type BrandSummary, roleManages, roleWrites } from '@dazbee/schema'
 
 import type { Session, SessionOf } from './sign-in/session.ts'
-import { findBrand, findRole } from './workspace/workspace.ts'
+import { findAccess, findBrand, type MemberAccess } from './workspace/workspace.ts'
 
-/** A person's place in the workspace a route is for: that workspace, and their role there. */
-export interface Membership {
+/**
+ * A person's place in the workspace a route is for: that workspace, their role there, and the brands
+ * they may see, a list for a limited member or null for every brand.
+ */
+export interface Membership extends MemberAccess {
   workspaceId: string
-  role: MemberRole
 }
 
 /**
@@ -55,14 +58,15 @@ export function requireSession(sessionOf: SessionOf): MiddlewareHandler<Env> {
 
 /**
  * Answers 404 "No such workspace" unless the session's person is a member of the route's `:workspaceId`;
- * otherwise puts their membership on the context. It runs after `requireSession`.
+ * otherwise puts their membership on the context, read again on every request. It runs after
+ * `requireSession`.
  */
 export function membershipScope(db: Db): MiddlewareHandler<Env> {
   return async (c, next) => {
     const workspaceId = c.req.param('workspaceId') ?? ''
-    const role = await findRole(db, workspaceId, c.var.session.userId)
-    if (!role) return c.json(error('No such workspace'), 404)
-    c.set('membership', { workspaceId, role })
+    const access = await findAccess(db, workspaceId, c.var.session.userId)
+    if (!access) return c.json(error('No such workspace'), 404)
+    c.set('membership', { workspaceId, ...access })
     await next()
   }
 }
@@ -83,12 +87,23 @@ export const requireManager: MiddlewareHandler<Env> = async (c, next) => {
 }
 
 /**
- * Answers 404 "No such brand" when the route's `:brandId` is not a brand of the membership's workspace;
- * otherwise puts the brand on the context. It runs after the membership's check.
+ * Answers 403 to a member limited to some brands, who can't add one; it runs after the membership's check.
+ */
+export const requireUnlimited: MiddlewareHandler<Env> = async (c, next) => {
+  if (c.var.membership.brandIds) return c.json(error('A member limited to some brands can’t add one'), 403)
+  await next()
+}
+
+/**
+ * Answers 404 "No such brand" when the route's `:brandId` is not a brand of the membership's workspace, or
+ * not one of a limited member's; otherwise puts the brand on the context. It runs after the membership's
+ * check.
  */
 export function brandScope(db: Db): MiddlewareHandler<Env> {
   return async (c, next) => {
-    const brand = await findBrand(db, c.var.membership.workspaceId, c.req.param('brandId') ?? '')
+    const { workspaceId, brandIds } = c.var.membership
+    const brandId = c.req.param('brandId') ?? ''
+    const brand = brandIds && !brandIds.includes(brandId) ? null : await findBrand(db, workspaceId, brandId)
     if (!brand) return c.json(error('No such brand'), 404)
     c.set('brand', brand)
     await next()

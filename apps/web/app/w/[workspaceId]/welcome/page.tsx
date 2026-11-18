@@ -2,7 +2,8 @@
 // and is kept as its website, or a plain name is typed (#203). The app opens here until the
 // workspace has a brand. It looks like the final mock's onboarding: the library's top bar, a bold
 // headline, and the website in one wide field with its button at the end. Daz says hello above it.
-// A Reviewer, who can't add a brand, sees Daz saying there are none yet instead.
+// A Reviewer, who can't add a brand, sees Daz saying there are none yet instead. A member limited to some
+// brands never adds one: the Brands page shows them theirs, or says they have none.
 import { redirect } from 'next/navigation'
 
 import { BrandStartForm } from '@/components/brands/brand-start-form.tsx'
@@ -13,7 +14,7 @@ import { workspacePath } from '@/lib/brand-routes.ts'
 import { brandFromForm, madeHref } from '@/lib/brand-start.ts'
 import { brandWords, type Messages } from '@/lib/i18n/index.ts'
 import { getMessages } from '@/lib/i18n/server.ts'
-import { createBrand, getRole, getWorkspace } from '@/lib/server/api.ts'
+import { createBrand, getAccess, getWorkspace } from '@/lib/server/api.ts'
 import { canChange } from '@/lib/settings-rights.ts'
 
 export const dynamic = 'force-dynamic'
@@ -29,7 +30,12 @@ export default async function WelcomePage({
   searchParams: Promise<{ error?: string }>
 }) {
   const [{ workspaceId }, { error }] = await Promise.all([params, searchParams])
-  const [t, workspace, role] = await Promise.all([getMessages(), getWorkspace(workspaceId), getRole(workspaceId)])
+  const [t, workspace, { role, limited }] = await Promise.all([
+    getMessages(),
+    getWorkspace(workspaceId),
+    getAccess(workspaceId),
+  ])
+  if (limited) redirect(workspacePath(workspaceId))
   const w = t.welcome
 
   async function startBrand(form: FormData) {

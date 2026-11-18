@@ -1,27 +1,38 @@
 'use client'
 
-// This workspace's Pending invites, for an Owner or Admin: each invite's email, role and expiry, with Copy
-// link, Resend and Revoke, in rows like the Pages card's, lit by a tint under the pointer and with no
-// outlines. What a row's action did shows under that row: the link copied, or the invite sent again. A
-// link the browser won't copy shows in the row to copy by hand. Why the API refused an action shows under
-// the heading, so it stays when the invite has left the list, as one revoked in another tab has. Its note,
-// done or refused, is the one the other parts of Settings show too.
+// This workspace's Pending invites, for an Owner or Admin: each invite's email, role, an Editor's or
+// Reviewer's brands and expiry, with Copy link, Resend and Revoke, in rows like the Pages card's, lit by a
+// tint under the pointer and with no outlines. What a row's action did shows under that row: the link copied,
+// or the invite sent again. A link the browser won't copy shows in the row to copy by hand. Why the API
+// refused an action shows under the heading, so it stays when the invite has left the list, as one revoked in
+// another tab has. Its note, done or refused, is the one the other parts of Settings show too.
 import { useState, useTransition } from 'react'
 
-import type { Invite } from '@dazbee/schema'
+import type { BrandSummary, Invite } from '@dazbee/schema'
 
 import { resend, revoke } from '@/app/w/[workspaceId]/(workspace)/settings/actions.ts'
 import { buttonStyles } from '@/components/ui/button.tsx'
 import { cn } from '@/lib/cn.ts'
 import { useLocale, useMessages } from '@/lib/i18n/client.tsx'
 import { format } from '@/lib/i18n/index.ts'
+import { canLimit } from '@/lib/settings-rights.ts'
 
+import { brandsLabel } from './brands-choice.tsx'
 import { Note } from './note.tsx'
 
 /** What a row's last action did. */
 type Answer = { done: string } | { link: string }
 
-export function PendingInvites({ workspaceId, invites }: { workspaceId: string; invites: Invite[] }) {
+export function PendingInvites({
+  workspaceId,
+  invites,
+  brands,
+}: {
+  workspaceId: string
+  invites: Invite[]
+  /** The workspace's brands, which name an invite's. */
+  brands: BrandSummary[]
+}) {
   const t = useMessages().settings
   // Why the API refused the last action, kept here rather than in its row, which may be gone.
   const [refusal, setRefusal] = useState<string | null>(null)
@@ -38,6 +49,7 @@ export function PendingInvites({ workspaceId, invites }: { workspaceId: string; 
             key={each.id}
             workspaceId={workspaceId}
             invite={each}
+            brands={brands}
             onAct={() => setRefusal(null)}
             onRefused={(error) => setRefusal(format(t.pending.refused, { email: each.email, error }))}
           />
@@ -51,11 +63,13 @@ export function PendingInvites({ workspaceId, invites }: { workspaceId: string; 
 function InviteRow({
   workspaceId,
   invite,
+  brands,
   onAct,
   onRefused,
 }: {
   workspaceId: string
   invite: Invite
+  brands: BrandSummary[]
   /** Hears that an action started, so the last one's refusal goes. */
   onAct: () => void
   /** Hears why the API refused an action. */
@@ -102,8 +116,10 @@ function InviteRow({
           <span title={invite.email} className="truncate text-small font-semibold text-text">
             {invite.email}
           </span>
-          <span className="truncate text-caption text-subtle">
-            {t.roles[invite.role]} · <time dateTime={invite.expiresAt}>{format(p.expires, { date: expires })}</time>
+          <span className="text-caption text-subtle [overflow-wrap:anywhere]">
+            {t.roles[invite.role]}
+            {canLimit(invite.role) && ` · ${brandsLabel(invite.brandIds, brands, t.brands)}`} ·{' '}
+            <time dateTime={invite.expiresAt}>{format(p.expires, { date: expires })}</time>
           </span>
         </span>
         <span className="flex shrink-0 items-center gap-0.5">

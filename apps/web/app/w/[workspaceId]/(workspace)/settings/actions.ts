@@ -1,20 +1,20 @@
 'use server'
 
-// What Settings' invites and members do: invite an email with a role, resend an invite and revoke one;
-// change a member's role, remove them and hand them Owner; and leave a workspace. Each takes the
-// workspace first, so a part binds it, and says why the API refused, in the person's language, where they
+// What Settings' invites and members do: invite an email with a role and brands, resend an invite and revoke
+// one; change a member's role or brands, remove them and hand them Owner; and leave a workspace. Each takes
+// the workspace first, so a part binds it, and says why the API refused, in the person's language, where they
 // made the change; Settings draws again with it, or, once the person has left, the workspace to open opens.
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
-import { CreateInvite, type UpdateMember } from '@dazbee/schema'
+import { CreateInvite, InviteRole, type MemberBrands, roleLimitable, type UpdateMember } from '@dazbee/schema'
 
 import { workspacePath } from '@/lib/brand-routes.ts'
 import { format } from '@/lib/i18n/index.ts'
 import { getMessages } from '@/lib/i18n/server.ts'
 import { findMe } from '@/lib/server/api.ts'
 import {
-  changeMemberRole,
+  changeMember,
   createInvite,
   handOverOwner,
   leaveWorkspace,
@@ -26,25 +26,36 @@ import {
 } from '@/lib/server/members.ts'
 import { forgetSession } from '@/lib/server/sign-in.ts'
 
-/** What an invite answered: whom it was sent to, why it wasn't, or nothing yet. */
-export type InviteAnswer = { sent: string } | { error: string } | null
+/**
+ * What an invite answered: whom it was sent to, why it wasn't (`field` naming the brands choice when it
+ * was theirs), or nothing yet.
+ */
+export type InviteAnswer = { sent: string } | { error: string; field?: 'brands' } | null
 
 /** The changes of invites and members, each refused for reasons of its own. */
-type Change = 'invite' | 'resend' | 'revoke' | 'role' | 'remove' | 'handOver' | 'leave'
+type Change = 'invite' | 'resend' | 'revoke' | 'role' | 'brands' | 'remove' | 'handOver' | 'leave'
 
 /**
- * Invites the form's email with its role, kept lower-cased. An email with a pending invite has it sent
- * again with this role. A form an invite can't be made from, such as one with no email, is refused here.
+ * Invites the form's email with its role, kept lower-cased, and for an Editor or Reviewer the brands it
+ * chose: every brand (`brands` is `all`), or those of its `brand` fields. An email with a pending invite
+ * has it sent again with this role and brands. A form an invite can't be made from, such as one with no
+ * email or with chosen brands but none ticked, is refused here.
  */
 export async function invite(workspaceId: string, _before: InviteAnswer, form: FormData): Promise<InviteAnswer> {
-  const input = CreateInvite.safeParse({ email: form.get('email') ?? '', role: form.get('role') })
+  const role = form.get('role')
+  const picked = InviteRole.safeParse(role)
+  const limits = picked.success && roleLimitable(picked.data)
+  const input = CreateInvite.safeParse({
+    email: form.get('email') ?? '',
+    role,
+    brandIds: limits && form.get('brands') === 'chosen' ? form.getAll('brand') : null,
+  })
   if (!input.success) {
-    const email = input.error.issues.some((issue) => issue.path[0] === 'email')
-    return {
-      error: email
-        ? (await getMessages()).settings.invite.badEmail
-        : input.error.issues.map((issue) => issue.message).join('; '),
-    }
+    const words = (await getMessages()).settings
+    const field = (name: string) => input.error.issues.some((issue) => issue.path[0] === name)
+    if (field('email')) return { error: words.invite.badEmail }
+    if (field('brandIds')) return { error: words.brands.noneChosen, field: 'brands' }
+    return { error: input.error.issues.map((issue) => issue.message).join('; ') }
   }
   const refusal = await refusalOf(() => createInvite(workspaceId, input.data))
   if (refusal) return { error: await wordsFor('invite', refusal, input.data.email) }
@@ -70,11 +81,25 @@ export async function revoke(workspaceId: string, inviteId: string): Promise<str
 export async function changeRole(
   workspaceId: string,
   userId: string,
-  role: UpdateMember['role'],
+  role: NonNullable<UpdateMember['role']>,
 ): Promise<string | null> {
-  const refusal = await refusalOf(() => changeMemberRole(workspaceId, userId, role))
+  const refusal = await refusalOf(() => changeMember(workspaceId, userId, { role }))
   changed(workspaceId)
   return refusal && wordsFor('role', refusal)
+}
+
+/**
+ * Changes the brands another member may see, a list or null for every brand; says why the API refused, or
+ * gives null.
+ */
+export async function changeBrands(
+  workspaceId: string,
+  userId: string,
+  brandIds: MemberBrands,
+): Promise<string | null> {
+  const refusal = await refusalOf(() => changeMember(workspaceId, userId, { brandIds }))
+  changed(workspaceId)
+  return refusal && wordsFor('brands', refusal)
 }
 
 /** Removes another member, who loses the workspace at once; says why the API refused, or gives null. */
@@ -113,8 +138,9 @@ function changed(workspaceId: string) {
 
 /**
  * The person's words for the API's refusal of a change, read from its status and the change refused.
- * Of a member's: a person no longer allowed to change them is a 403, one no longer a member a 404, the
- * Owner's handing over refused to anyone else a 403 and to a member no longer an Admin a 400, and the
+ * Of a member's: a person no longer allowed to change them is a 403, one no longer a member a 404, brands
+ * that can't be given (the member no longer an Editor or Reviewer, or a brand not the workspace's) a 400,
+ * the Owner's handing over refused to anyone else a 403 and to a member no longer an Admin a 400, and the
  * Owner's leaving a 400. Of an invite's: inviting a member is a 400 (the form is checked here first), a
  * person no longer an Owner or Admin a 403, an invite no longer pending a 404 on resend or revoke, and an
  * invite being sent or changed meanwhile a 409, except on revoke, where a 409 is an invite already
@@ -122,8 +148,9 @@ function changed(workspaceId: string) {
  */
 async function wordsFor(change: Change, refusal: Refusal, email = ''): Promise<string> {
   const r = (await getMessages()).settings.refusals
-  if (change === 'role' || change === 'remove' || change === 'handOver') {
+  if (change === 'role' || change === 'brands' || change === 'remove' || change === 'handOver') {
     if (refusal.status === 404) return r.memberGone
+    if (change === 'brands' && refusal.status === 400) return r.brandsRefused
     if (change !== 'handOver') return refusal.status === 403 ? r.notAllowed : refusal.message
     if (refusal.status === 403) return r.notOwner
     return refusal.status === 400 ? r.notAdmin : refusal.message

@@ -1,7 +1,8 @@
 // Settings, in two parts as the final mock's settings: a bold title, then each part in a panel. You
 // holds the person's own settings and workspaces, each but the one they own with Leave; This workspace
-// holds its name, which only an Owner or Admin can change, and its members, whose roles only an Owner or
-// Admin changes. An Owner or Admin also sees Invite and the pending invites.
+// holds its name, which only an Owner or Admin can change, and its members, whose roles and brands only an
+// Owner or Admin changes. An Owner or Admin also sees Invite, whose brands start at the brand Settings was
+// opened from (`?brand=`), and the pending invites.
 import { redirect } from 'next/navigation'
 
 import { LibraryShell } from '@/components/library/library-shell.tsx'
@@ -16,7 +17,7 @@ import { cn } from '@/lib/cn.ts'
 import { showsBrandList } from '@/lib/home.ts'
 import { brandWords, type Messages } from '@/lib/i18n/index.ts'
 import { getMessages } from '@/lib/i18n/server.ts'
-import { getMe, getRole, getWorkspace, listBrands, updateWorkspace } from '@/lib/server/api.ts'
+import { getAccess, getMe, getWorkspace, listBrands, updateWorkspace } from '@/lib/server/api.ts'
 import { listInvites, listMembers } from '@/lib/server/members.ts'
 import { canInvite, canRenameWorkspace } from '@/lib/settings-rights.ts'
 
@@ -27,19 +28,19 @@ export default async function SettingsPage({
   searchParams,
 }: {
   params: Promise<{ workspaceId: string }>
-  searchParams: Promise<{ saved?: string }>
+  searchParams: Promise<{ saved?: string; brand?: string }>
 }) {
-  const [{ workspaceId }, { saved }] = await Promise.all([params, searchParams])
-  const roleRead = getRole(workspaceId)
-  const [t, workspace, brands, me, role, members, invites] = await Promise.all([
+  const [{ workspaceId }, { saved, brand }] = await Promise.all([params, searchParams])
+  const accessRead = getAccess(workspaceId)
+  const [t, workspace, brands, me, { role, limited }, members, invites] = await Promise.all([
     getMessages(),
     getWorkspace(workspaceId),
     listBrands(workspaceId),
     getMe(),
-    roleRead,
+    accessRead,
     listMembers(workspaceId),
     // Only an Owner or Admin reads the pending invites: their links let anyone in.
-    roleRead.then((role) => (canInvite(role) ? listInvites(workspaceId) : null)),
+    accessRead.then(({ role }) => (canInvite(role) ? listInvites(workspaceId) : null)),
   ])
   const here = workspacePath(workspaceId, 'settings')
 
@@ -83,11 +84,22 @@ export default async function SettingsPage({
                 </p>
               </div>
             )}
-            <MembersPanel workspaceId={workspaceId} members={members} viewerId={me.id} viewerRole={role} />
+            <MembersPanel
+              workspaceId={workspaceId}
+              members={members}
+              brands={brands}
+              viewerId={me.id}
+              viewerRole={role}
+              viewerLimited={limited}
+            />
             {invites && (
               <>
-                <InviteForm workspaceId={workspaceId} />
-                <PendingInvites workspaceId={workspaceId} invites={invites} />
+                <InviteForm
+                  workspaceId={workspaceId}
+                  brands={brands}
+                  fromBrand={brands.find((each) => each.id === brand)?.id}
+                />
+                <PendingInvites workspaceId={workspaceId} invites={invites} brands={brands} />
               </>
             )}
           </section>

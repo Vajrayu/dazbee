@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto'
 
 import { afterAll, beforeAll, expect } from 'vitest'
 
-import { brands, memberships, openDatabase, users, workspaces } from '@dazbee/db'
+import { brands, membershipBrands, memberships, openDatabase, users, workspaces } from '@dazbee/db'
 import { AssetSummary, type MemberRole, UploadTicket } from '@dazbee/schema'
 import { openStorage, storageSettings } from '@dazbee/storage'
 
@@ -124,9 +124,10 @@ export async function addWorkspace(name = 'Team') {
 /**
  * Makes a person who is a member of each workspace given, with the role given there, signed in as the
  * caller `as` that `call` and `request` take, asking in the first workspace unless told another. Each is
- * new, so a test may change or remove them without touching another test's people.
+ * new, so a test may change or remove them without touching another test's people. A third entry limits
+ * them there to those brands.
  */
-export async function addPerson(roles: [workspaceId: string, role: MemberRole][]) {
+export async function addPerson(roles: [workspaceId: string, role: MemberRole, brandIds?: string[]][]) {
   const n = (made += 1)
   const person = {
     id: `user-${n}-${run}`,
@@ -135,7 +136,15 @@ export async function addPerson(roles: [workspaceId: string, role: MemberRole][]
     name: `Person ${n}`,
   }
   await db.insert(users).values(person)
-  await db.insert(memberships).values(roles.map(([workspaceId, role]) => ({ workspaceId, userId: person.id, role })))
+  await db
+    .insert(memberships)
+    .values(
+      roles.map(([workspaceId, role, limit]) => ({ workspaceId, userId: person.id, role, limited: Boolean(limit) })),
+    )
+  const limits = roles.flatMap(([workspaceId, , limit = []]) =>
+    limit.map((brandId) => ({ workspaceId, userId: person.id, brandId })),
+  )
+  if (limits.length > 0) await db.insert(membershipBrands).values(limits)
   const as = `person-${n}`
   callers[as] = { userId: person.id, workspaceId: roles[0]?.[0] ?? workspace.id }
   tokens[as] = signSessionToken(sessionSecret, { userId: person.id, workosSessionId: null }).token

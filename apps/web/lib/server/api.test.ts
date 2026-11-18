@@ -2,16 +2,16 @@
 // paths it asks the API for.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { getRole, getWorkspace, listDesigns, signInLink } from './api.ts'
+import { getAccess, getRole, getWorkspace, listDesigns, signInLink } from './api.ts'
 
-/** The person `/me` answers with: the Owner of one workspace and an Editor in another. */
+/** The person `/me` answers with: the Owner of one workspace and an Editor limited to some brands in another. */
 const ME = {
   id: 'user-1',
   name: 'Ada',
   email: 'ada@example.com',
   workspaces: [
-    { id: 'workspace-1', name: 'Harbour', role: 'owner' },
-    { id: 'workspace-2', name: 'Agency', role: 'editor' },
+    { id: 'workspace-1', name: 'Harbour', role: 'owner', limited: false },
+    { id: 'workspace-2', name: 'Agency', role: 'editor', limited: true },
   ],
   open: 'workspace-1',
 }
@@ -68,6 +68,17 @@ describe('signInLink', () => {
     await signInLink('a-state-of-sixteen-or-more', 'not a token&x=1')
 
     expect(askedWithQuery).toEqual(['/auth/sign-in-url?state=a-state-of-sixteen-or-more'])
+  })
+})
+
+describe('getAccess', () => {
+  it('gives the person’s role and whether they are limited to some brands in the workspace, typed in any case', async () => {
+    expect(await getAccess('WORKSPACE-2')).toEqual({ role: 'editor', limited: true })
+    expect(await getAccess('workspace-1')).toEqual({ role: 'owner', limited: false })
+  })
+
+  it('gives the fewest rights for a workspace that isn’t theirs: a Reviewer’s, limited', async () => {
+    expect(await getAccess('workspace-3')).toEqual({ role: 'reviewer', limited: true })
   })
 })
 

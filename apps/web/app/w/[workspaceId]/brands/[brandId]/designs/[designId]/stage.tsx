@@ -63,6 +63,7 @@ export function EditorStage({
   brandId,
   brandName,
   everyBrand,
+  forEveryBrand,
   syncUrl,
   account,
   member,
@@ -75,6 +76,8 @@ export function EditorStage({
   brandName: string
   /** How the workspace says "every brand", for a template's scope (#54). */
   everyBrand: string
+  /** Whether the member may save a template for every brand: not one limited to some brands. */
+  forEveryBrand: boolean
   syncUrl: string
   /** The account avatar and its menu, at the top end after Share. */
   account?: ReactNode
@@ -367,6 +370,7 @@ export function EditorStage({
               brandName={brandName}
               designName={name}
               everyBrand={everyBrand}
+              forEveryBrand={forEveryBrand}
               viewOnly={viewOnly}
             />
           ) : undefined

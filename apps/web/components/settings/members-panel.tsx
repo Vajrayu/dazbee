@@ -1,15 +1,24 @@
 'use client'
 
-// This workspace's Members: each member's initials, name, email and role, from Owner down, in rows like
-// the Pages card's, lit by a tint under the pointer and with no outlines. An Owner or Admin sees, on every
-// other member's row but the Owner's, the role as a menu that changes it and Remove; the Owner also sees
-// Hand over Owner on an Admin's row. Remove and Hand over each ask once, in a small menu. Why the API
+// This workspace's Members: each member's initials, name, email and role, and an Editor's or Reviewer's
+// brands, from Owner down, in rows like the Pages card's, lit by a tint under the pointer and with no
+// outlines. An Owner or Admin sees, on every other member's row but the Owner's, the role as a menu that
+// changes it, an Editor's or Reviewer's brands as a menu that changes them, and Remove; the Owner also sees
+// Hand over Owner on an Admin's row. Remove and Hand over each ask once, in a small menu, and so does making
+// a member limited to some brands an Admin, in the role menu, since they then see every brand. Why the API
 // refused a change shows under the heading, so it stays when the member has left the list.
 import { useState, useTransition } from 'react'
 
-import { INVITE_ROLES, type InviteRole, type MemberRole, type WorkspaceMember } from '@dazbee/schema'
+import {
+  type BrandSummary,
+  INVITE_ROLES,
+  type InviteRole,
+  type MemberBrands,
+  type MemberRole,
+  type WorkspaceMember,
+} from '@dazbee/schema'
 
-import { changeRole, handOver, remove } from '@/app/w/[workspaceId]/(workspace)/settings/actions.ts'
+import { changeBrands, changeRole, handOver, remove } from '@/app/w/[workspaceId]/(workspace)/settings/actions.ts'
 import { buttonStyles } from '@/components/ui/button.tsx'
 import { CaretDownIcon, CheckIcon } from '@/components/ui/icons.tsx'
 import { Menu, MenuRadio, MenuRadios } from '@/components/ui/menu.tsx'
@@ -17,9 +26,10 @@ import { cn } from '@/lib/cn.ts'
 import { useMessages } from '@/lib/i18n/client.tsx'
 import { format } from '@/lib/i18n/index.ts'
 import { initialsOf } from '@/lib/initials.ts'
-import { type RowControls, rowControls } from '@/lib/settings-rights.ts'
+import { asksBeforeRole, canLimit, type RowControls, rowControls } from '@/lib/settings-rights.ts'
 
-import { ConfirmMenu } from './confirm-menu.tsx'
+import { brandsLabel, BrandsMenu } from './brands-choice.tsx'
+import { ConfirmMenu, ConfirmRows } from './confirm-menu.tsx'
 import { Note } from './note.tsx'
 
 /** A change a row makes to its member, which gives why the API refused it, or null. */
@@ -31,14 +41,23 @@ const nameOf = (member: WorkspaceMember) => member.name || member.email
 export function MembersPanel({
   workspaceId,
   members,
+  brands,
   viewerId,
   viewerRole,
+  viewerLimited,
 }: {
   workspaceId: string
   members: WorkspaceMember[]
+  /** The workspace's brands the viewer sees, which name the members'. */
+  brands: BrandSummary[]
   /** The person looking, whose own row shows no controls. */
   viewerId: string
   viewerRole: MemberRole
+  /**
+   * Whether the viewer is limited to some brands, and so sees of each member's brands only their own: a
+   * member with none of those shows no brands rather than "No brands".
+   */
+  viewerLimited: boolean
 }) {
   const s = useMessages().settings
   // Why the API refused the last change, kept here rather than in its row, which may be gone.
@@ -55,6 +74,8 @@ export function MembersPanel({
             key={member.id}
             workspaceId={workspaceId}
             member={member}
+            brands={brands}
+            viewerLimited={viewerLimited}
             controls={rowControls(viewerRole, member.role, member.id === viewerId)}
             onAct={() => setRefusal(null)}
             onRefused={(error) => setRefusal(format(s.member.refused, { name: nameOf(member), error }))}
@@ -69,12 +90,16 @@ export function MembersPanel({
 function MemberRow({
   workspaceId,
   member,
+  brands,
+  viewerLimited,
   controls,
   onAct,
   onRefused,
 }: {
   workspaceId: string
   member: WorkspaceMember
+  brands: BrandSummary[]
+  viewerLimited: boolean
   controls: RowControls
   /** Hears that a change started, so the last one's refusal goes. */
   onAct: () => void
@@ -123,12 +148,29 @@ function MemberRow({
         {controls.role ? (
           <RoleMenu
             role={member.role}
+            brandIds={member.brandIds}
             name={name}
             busy={busy}
             onPick={(role) => act(() => changeRole(workspaceId, member.id, role))}
           />
         ) : (
           <span className="px-2.5 text-label font-medium text-muted">{s.roles[member.role]}</span>
+        )}
+        {controls.brands ? (
+          <BrandsMenu
+            brands={brands}
+            brandIds={member.brandIds}
+            name={name}
+            busy={busy}
+            onSave={(brandIds) => act(() => changeBrands(workspaceId, member.id, brandIds))}
+          />
+        ) : (
+          canLimit(member.role) &&
+          !(viewerLimited && member.brandIds?.length === 0) && (
+            <span data-testid="member-brands" className="max-w-56 truncate px-2.5 text-label font-medium text-muted">
+              {brandsLabel(member.brandIds, brands, s.brands)}
+            </span>
+          )
         )}
         {controls.handOver && (
           <ConfirmMenu
@@ -169,21 +211,32 @@ function MemberRow({
   )
 }
 
-/** The member's role as a button that opens the roles a member can be given, theirs ticked. */
+/**
+ * The member's role as a button that opens the roles a member can be given, theirs ticked. A role that
+ * asks first (`asksBeforeRole`) keeps the menu open on the question, with the change and Cancel.
+ */
 function RoleMenu({
   role,
+  brandIds,
   name,
   busy,
   onPick,
 }: {
   role: MemberRole
+  /** The member's brands, which decide whether a role asks first. */
+  brandIds: MemberBrands
   name: string
   busy: boolean
   onPick: (role: InviteRole) => void
 }) {
   const s = useMessages().settings
+  const m = s.member
   const [open, setOpen] = useState(false)
-  const label = format(s.member.roleOf, { name })
+  // The role picked that asks first, while the menu asks.
+  const [asking, setAsking] = useState<InviteRole | null>(null)
+  const label = format(m.roleOf, { name })
+  /** Whether picking `each` asks first, keeping the menu open on the question. */
+  const asks = (each: InviteRole) => each !== role && asksBeforeRole(brandIds, each)
   return (
     <Menu
       trigger={
@@ -201,26 +254,42 @@ function RoleMenu({
         </button>
       }
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={(opening) => {
+        // Each opening starts at the roles, not the question.
+        setAsking(null)
+        setOpen(opening)
+      }}
       label={label}
       place={{ side: 'bottom', align: 'end', sideOffset: 6, collisionPadding: 12 }}
-      className="w-48"
+      className={asking ? 'w-72' : 'w-48'}
     >
-      <MenuRadios
-        value={role}
-        label={label}
-        onValueChange={(picked) => {
-          const next = INVITE_ROLES.find((each) => each === picked)
-          if (next && next !== role) onPick(next)
-        }}
-      >
-        {INVITE_ROLES.map((each) => (
-          <MenuRadio key={each} value={each} label={s.roles[each]} data-role={each}>
-            {s.roles[each]}
-            <CheckIcon size={14} aria-hidden className="invisible shrink-0 group-aria-checked:visible" />
-          </MenuRadio>
-        ))}
-      </MenuRadios>
+      {asking ? (
+        <ConfirmRows
+          question={format(m.makeAdminConfirm, { name })}
+          confirm={m.makeAdmin}
+          cancel={m.cancel}
+          focus
+          onConfirm={() => onPick(asking)}
+        />
+      ) : (
+        <MenuRadios
+          value={role}
+          label={label}
+          onValueChange={(picked) => {
+            const next = INVITE_ROLES.find((each) => each === picked)
+            if (!next || next === role) return
+            if (asks(next)) setAsking(next)
+            else onPick(next)
+          }}
+        >
+          {INVITE_ROLES.map((each) => (
+            <MenuRadio key={each} value={each} label={s.roles[each]} stayOpen={asks(each)} data-role={each}>
+              {s.roles[each]}
+              <CheckIcon size={14} aria-hidden className="invisible shrink-0 group-aria-checked:visible" />
+            </MenuRadio>
+          ))}
+        </MenuRadios>
+      )}
     </Menu>
   )
 }
