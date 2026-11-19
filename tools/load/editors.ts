@@ -1,12 +1,15 @@
 // The load test: how many people editing at once the server holds. It ramps simulated people
 // (person.ts) in steps; each opens their own design, moves its frame every 2 s, and once a step loads
 // the Brands page and uploads an image. At the end of each step it says, for each of the four, how many
-// were timed, their median and slowest, and the failures, and it stops at the first step where any has
-// a median over 1 s, a slowest over 3 s, or a failure (timings.ts). It talks to the web app and sync
-// server only, as a browser does, so it runs from a developer's machine:
+// were timed, their median and slowest, and the failures, and which limits each passed: a median over
+// 1 s or a slowest over 3 s (timings.ts). It stops at the first step where any of the measures named by
+// --stop-on passes a limit, or anything fails. Opening a design and an upload take several round trips,
+// so from far away they can pass the limits with the server idle; --stop-on edit,brands then ramps on
+// while the steps still say when the others passed. It talks to the web app and sync server only, as a
+// browser does, so it runs from a developer's machine:
 //
 //   node tools/load/editors.ts <file> [--web https://app.dazbee.com] [--sync wss://sync.dazbee.com]
-//     [--steps 5,10,20,30,40,60,80,100] [--step-seconds 60]
+//     [--steps 5,10,20,30,40,60,80,100] [--step-seconds 60] [--stop-on open,edit,brands,upload]
 //
 // The whole run against production, from the repo's root, with the server's SSH host as <server>:
 //
@@ -28,7 +31,7 @@ import { parseArgs } from 'node:util'
 
 import type { LoadWorkspace } from './load-workspace.ts'
 import { simulatedPerson } from './person.ts'
-import { LIMITS, type Measure, MEASURES, passed, stepTimings, type Summary } from './timings.ts'
+import { LIMITS, type Measure, MEASURES, passed, passedAny, stepTimings, type Summary } from './timings.ts'
 import { findSyncTokenAction, webAppAs } from './web-app.ts'
 
 /** How long a step's newcomers take to arrive, spread evenly, before the step's other work starts. */
@@ -47,10 +50,16 @@ const { values, positionals } = parseArgs({
     sync: { type: 'string', default: 'wss://sync.dazbee.com' },
     steps: { type: 'string', default: '5,10,20,30,40,60,80,100' },
     'step-seconds': { type: 'string', default: '60' },
+    'stop-on': { type: 'string', default: MEASURES.join(',') },
   },
 })
 const [file] = positionals
-if (!file) throw new Error('usage: editors.ts <file> [--web URL] [--sync URL] [--steps 5,10,…] [--step-seconds 60]')
+if (!file)
+  throw new Error(
+    'usage: editors.ts <file> [--web URL] [--sync URL] [--steps 5,10,…] [--step-seconds 60] [--stop-on open,edit,…]',
+  )
+const stopOn = values['stop-on'].split(',') as Measure[]
+if (stopOn.some((m) => !MEASURES.includes(m))) throw new Error(`--stop-on names some of ${MEASURES.join(', ')}`)
 const webUrl = values.web.replace(/\/+$/, '')
 const syncUrl = values.sync.replace(/\/+$/, '')
 const stepMs = Number(values['step-seconds']) * 1000
@@ -62,7 +71,9 @@ if (steps.some((n, i) => !Number.isInteger(n) || n < 1 || n > workspace.people.l
 
 const say = (line: string) => console.log(`${new Date().toISOString().slice(11, 19)}  ${line}`)
 
-say(`workspace ${workspace.workspaceId}: ${webUrl} and ${syncUrl}, steps of ${stepMs / 1000} s: ${steps.join(', ')}`)
+say(
+  `workspace ${workspace.workspaceId}: ${webUrl} and ${syncUrl}, steps of ${stepMs / 1000} s: ${steps.join(', ')}; stopping on ${stopOn.join(', ')}`,
+)
 const actionId = await findSyncTokenAction(
   webUrl,
   workspace.workspaceId,
@@ -104,7 +115,9 @@ for (const target of steps) {
   const summaries = timings.summaries()
   say(`${target} people: ${MEASURES.map((m) => `${m} ${line(summaries[m])}`).join('; ')}`)
   const over = MEASURES.flatMap((m) => passedBy(m, summaries[m]))
-  if (over.length > 0) {
+  if (over.length > 0) say(`${target} people passed: ${over.join(', ')}`)
+  const stopping = MEASURES.some((m) => summaries[m].failures > 0 || (stopOn.includes(m) && passedAny(summaries[m])))
+  if (stopping) {
     stoppedAt = { people: target, passed: over }
     break
   }
