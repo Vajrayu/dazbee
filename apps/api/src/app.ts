@@ -1,9 +1,10 @@
 // The API: every area's routes on one app. Each workspace is at /workspaces/:workspaceId, for its members
 // only: a workspace the person is not a member of, a brand or design of another workspace, and a brand outside
 // a limited member's, are answered as if they didn't exist (ADR-0016). Outside a workspace there are only
-// /health, sign-in's /auth/* (with the development invites' accept route), the person's own /me, early
-// access's /admin/*, for admins only, and its public request to join, /access-requests. A person whose
-// access an admin removed is answered 401 on every route that needs a session. Every
+// /health, sign-in's /auth/* (with the development invites' accept route), the person's own /me and
+// /me/*, early access's /admin/*, for admins only, and its public request to join, /access-requests. A person
+// whose account is deleted, or whose access an admin removed, is answered 401 on every route that needs a
+// session. Every
 // route below a brand reads its brand from `brandScope`, and an `Invalid*` error answers 400 here, and a
 // `MemberRefusal` its own status, whichever route throws it.
 import { Hono } from 'hono'
@@ -29,7 +30,7 @@ import type { InvitesProvider, InvitesProviders } from './members/invites-provid
 import { MemberRefusal } from './members/members.ts'
 import { memberRoutes } from './members/routes.ts'
 import { devInviteRoutes, type DevInvitesSettings } from './sign-in/dev-invites.ts'
-import { removedRefusal } from './sign-in/early-access.ts'
+import { sessionRefusal } from './sign-in/early-access.ts'
 import { signInRoutes } from './sign-in/routes.ts'
 import type { SessionOf } from './sign-in/session.ts'
 import type { SignInSettings } from './sign-in/sign-in.ts'
@@ -77,7 +78,7 @@ export function createApp({
   app.route('/', adminRoutes({ db, sessionOf, admins, invites: providers }))
   app.route('/', accessRequestRoutes({ db, limit: requests, turnstile }))
 
-  const signedIn = requireSession(sessionOf, removedRefusal(db, admins))
+  const signedIn = requireSession(sessionOf, sessionRefusal(db, admins))
   const records = new Hono<Env>()
     .route('/', brandRoutes({ db, storage, syncSecret }))
     .route('/', versionRoutes({ db, storage }))
@@ -87,7 +88,8 @@ export function createApp({
     .route('/', fontRoutes({ db, storage }))
 
   app.use('/me', signedIn)
-  app.route('/', meRoutes({ db }))
+  app.use('/me/*', signedIn)
+  app.route('/', meRoutes({ db, deleters: { storage, signIn: signIn?.provider ?? null, invites: invites.workos } }))
 
   // `/workspaces/:workspaceId/*` matches the workspace's own path too.
   app.use('/workspaces/:workspaceId/*', signedIn, membershipScope(db))

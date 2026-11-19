@@ -46,6 +46,10 @@ export interface SignInProvider {
   signOutUrl(sessionId: string): string
   /** Ends a WorkOS session from here, so the next sign-in asks who the person is again. */
   endSession(sessionId: string): Promise<void>
+  /** Deletes a deleted workspace's organization; throws one with `status` 404 when there is none. */
+  deleteOrganization(organizationId: string): Promise<void>
+  /** Deletes a deleted account's WorkOS user; throws one with `status` 404 when there is none. */
+  deleteUser(workosUserId: string): Promise<void>
 }
 
 /** What accepting a person's invites did: the workspace to open, and whether an invite went unread. */
@@ -143,6 +147,12 @@ export function workosProvider({ apiKey, clientId, redirectUri }: WorkosSettings
       workos.userManagement.getLogoutUrl({ sessionId, returnTo: new URL('/login', redirectUri).href }),
     async endSession(sessionId) {
       await workos.userManagement.revokeSession({ sessionId })
+    },
+    async deleteOrganization(organizationId) {
+      await workos.organizations.deleteOrganization(organizationId)
+    },
+    async deleteUser(workosUserId) {
+      await workos.userManagement.deleteUser(workosUserId)
     },
   }
 }

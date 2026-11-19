@@ -48,12 +48,12 @@ export async function body<T extends z.ZodType>(request: Request, schema: T): Pr
 
 /**
  * Answers 401 to a request `sessionOf` finds no session for, and to one whose person `refuses` turns away,
- * with its refusal, as early access does a person whose access was removed; otherwise puts its session on
- * the context.
+ * with its refusal, as for a person whose account is deleted or whose access was removed; otherwise puts its
+ * session on the context.
  */
 export function requireSession(
   sessionOf: SessionOf,
-  refuses: (userId: string) => Promise<SignInRefused | null> = () => Promise.resolve(null),
+  refuses: (userId: string) => Promise<ApiError | SignInRefused | null> = () => Promise.resolve(null),
 ): MiddlewareHandler<Env> {
   return async (c, next) => {
     const session = await sessionOf(c.req.raw)

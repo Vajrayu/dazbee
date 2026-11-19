@@ -82,4 +82,12 @@ describe('LoginPage', () => {
     expect(await render({ error: 'open-invite' })).not.toContain('data-testid="request-access"')
     expect(await render({})).not.toContain('data-testid="request-access"')
   })
+
+  it('says the account is deleted right after it is, in each language, as news rather than a refusal', async () => {
+    expect(await render({ deleted: '1' })).toContain('Your account is deleted.')
+    expect(await noticeOf({ deleted: '1' })).toBeNull()
+    locale = 'ar'
+    expect(await render({ deleted: '1' })).toContain('حُذف حسابك.')
+    expect(await render({})).not.toContain('data-testid="sign-in-news"')
+  })
 })

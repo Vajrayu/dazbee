@@ -40,6 +40,10 @@ _Avoid_: Waitlist, queue, signups
 A signed-in person, in any of their workspaces at once: each page names the workspace it shows, and every API route checks that the person is a member there and may see the brand. It ends when they sign out or after seven days; stopping being a member of a workspace refuses their next request there at once, and closes a design they have open within ten minutes.
 _Avoid_: Login, auth
 
+**Account**:
+A person's own records: their name and email, their memberships, invites to their email and their request to join. Deleting it from Settings deletes the workspaces they own alone, with everything in them, and takes them out of every other workspace, where what they made stays; an Owner of a workspace with other members hands over Owner first. Signing up again with the same email starts fresh.
+_Avoid_: Profile, user (a user is the person's row; the account is all that is theirs)
+
 **Brand**:
 What a workspace makes work for: a solo user's business, a company's product line or region, or an agency's client. Every design, brand kit and asset belongs to exactly one brand, and a brand is a wall: nothing crosses from one brand to another.
 _Avoid_: Client, customer, project (an agency's clients are brands too, ADR-0013)

@@ -3,10 +3,11 @@
 // brings its `invitation_token`, which the sign-in link carries on, so WorkOS accepts the invite. A
 // sign-in early access refused comes back with its reason, and the notice says what to do; the address to
 // write to is the setting SUPPORT_EMAIL. Under the early-access notice, Request access puts the person on the
-// waiting list, with Cloudflare Turnstile's check when TURNSTILE_SITE_KEY is set.
+// waiting list, with Cloudflare Turnstile's check when TURNSTILE_SITE_KEY is set. Right after a person deletes
+// their account, it says the account is deleted.
 import { buttonStyles } from '@/components/ui/button.tsx'
 import { DazbeeMark } from '@/components/ui/dazbee-mark.tsx'
-import { WarningCircleIcon } from '@/components/ui/icons.tsx'
+import { CheckIcon, WarningCircleIcon } from '@/components/ui/icons.tsx'
 import { cn } from '@/lib/cn.ts'
 import type { Messages } from '@/lib/i18n/en.ts'
 import { getMessages } from '@/lib/i18n/server.ts'
@@ -27,9 +28,17 @@ export async function generateMetadata() {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; unavailable?: string; invite?: string; invitation_token?: string }>
+  searchParams: Promise<{
+    error?: string
+    unavailable?: string
+    invite?: string
+    invitation_token?: string
+    deleted?: string
+  }>
 }) {
   const [t, query] = await Promise.all([getMessages(), searchParams])
+  // Right after deleting their account, the person is told it is deleted, as news rather than a refusal.
+  const news = query.deleted ? t.signIn.deleted : null
   const notice = query.unavailable ? (
     t.signIn.unavailable
   ) : query.error === 'early-access' ? (
@@ -53,6 +62,16 @@ export default async function LoginPage({
             {t.signIn.headline} <br />
             {t.signIn.headlineEnd}
           </h1>
+          {news && (
+            <p
+              role="status"
+              data-testid="sign-in-news"
+              className="flex items-center gap-2 rounded-[10px] border border-line bg-raised px-3 py-2.5 text-label text-text"
+            >
+              <CheckIcon aria-hidden size={18} weight="bold" className="shrink-0 text-success" />
+              <span className="min-w-0">{news}</span>
+            </p>
+          )}
           {notice && (
             <p
               role="alert"

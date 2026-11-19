@@ -4,7 +4,17 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { changeBrands, changeRole, handOver, invite, leave, remove, resend, revoke } from './actions.ts'
+import {
+  changeBrands,
+  changeRole,
+  deleteMyAccount,
+  handOver,
+  invite,
+  leave,
+  remove,
+  resend,
+  revoke,
+} from './actions.ts'
 
 /** The language the person picked, if any, and the cookies deleted; held where the hoisted cookie stub reads them. */
 const picked = vi.hoisted(() => ({ locale: undefined as string | undefined, deleted: [] as string[] }))
@@ -358,5 +368,32 @@ describe('leave', () => {
 
     expect(await leave('workspace-1')).toBe('Hand over Owner to an Admin before you leave.')
     expect(redirect).not.toHaveBeenCalled()
+  })
+})
+
+describe('deleteMyAccount', () => {
+  it('deletes the account with the email typed, forgets the session alone and opens sign-in saying so', async () => {
+    answer = { status: 204, body: null }
+
+    expect(await deleteMyAccount('workspace-1', 'Ada@Example.com')).toBeUndefined()
+    expect(asked).toEqual([{ method: 'DELETE', path: '/me', body: { email: 'Ada@Example.com' } }])
+    expect(picked.deleted).toEqual(['dazbee_session'])
+    expect(redirect).toHaveBeenCalledWith('/login?deleted=1')
+  })
+
+  it("says why the API refused, in the person's words, and draws Settings again", async () => {
+    picked.locale = 'ar'
+    answer = { status: 400, body: { error: 'Type your account’s email to delete it', handOver: [] } }
+    expect(await deleteMyAccount('workspace-1', 'someone@example.com')).toBe(
+      'هذا ليس البريد الإلكتروني لحسابك. اكتبه كما يظهر.',
+    )
+    picked.locale = undefined
+    answer = { status: 409, body: { error: 'Hand over Owner first', handOver: [{ id: 'w-2', name: 'Team' }] } }
+    expect(await deleteMyAccount('workspace-1', 'ada@example.com')).toBe(
+      'Hand over Owner of the workspaces below before you delete your account.',
+    )
+    expect(revalidatePath).toHaveBeenCalledWith('/w/workspace-1/settings')
+    expect(redirect).not.toHaveBeenCalled()
+    expect(picked.deleted).toEqual([])
   })
 })

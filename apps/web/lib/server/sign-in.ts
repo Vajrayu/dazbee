@@ -45,3 +45,9 @@ export async function forgetSession(): Promise<string> {
   jar.delete(SESSION_COOKIE)
   return logoutUrl ?? '/login'
 }
+
+/** Forgets the session token alone, for a person whose account is deleted: their WorkOS session went with it. */
+export async function forgetDeletedSession() {
+  const jar = await cookies()
+  jar.delete(SESSION_COOKIE)
+}

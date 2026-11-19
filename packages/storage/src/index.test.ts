@@ -74,4 +74,15 @@ describe('openStorage', () => {
       403,
     )
   })
+
+  it('lists a folder a page at a time, and deletes it without the folder whose name starts the same', async () => {
+    const folder = `test/${randomUUID()}`
+    const keys = [`${folder}/a/1`, `${folder}/a/2`, `${folder}/b & <c>.png`, `${folder}/c`, `${folder}/d/e`]
+    await Promise.all([...keys, `${folder}-next/kept`].map((key) => storage.put(key, bytes, 'image/png')))
+    expect((await storage.list(`${folder}/`, 2)).sort()).toEqual([...keys].sort())
+    await storage.deleteFolder(`${folder}/`)
+    expect(await storage.list(`${folder}/`)).toEqual([])
+    expect(await storage.exists(`${folder}-next/kept`)).toBe(true)
+    await expect(storage.deleteFolder(folder)).rejects.toThrow('not a folder')
+  })
 })
