@@ -2,6 +2,7 @@
 import { serve } from '@hono/node-server'
 
 import { migrateDatabase, openDatabase } from '@dazbee/db'
+import { sessionSecret } from '@dazbee/session-token'
 import { openStorage, storageSettings } from '@dazbee/storage'
 import { syncTokenSecret } from '@dazbee/sync-token'
 
@@ -12,7 +13,7 @@ import { finishSoon } from './me/pending-deletions.ts'
 import { workosInvites } from './members/invites-provider.ts'
 import { devInvites } from './sign-in/dev-invites.ts'
 import { allowList } from './sign-in/early-access.ts'
-import { seedDevelopment, sessionOfRequest, sessionSecret } from './sign-in/session.ts'
+import { seedDevelopment, sessionOfRequest } from './sign-in/session.ts'
 import { workosProvider, workosSettings } from './sign-in/sign-in.ts'
 
 const databaseUrl = process.env.DATABASE_URL

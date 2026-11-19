@@ -10,6 +10,7 @@
 import { Hono } from 'hono'
 
 import type { Db } from '@dazbee/db'
+import { readSessionToken } from '@dazbee/session-token'
 import type { Storage } from '@dazbee/storage'
 
 import type { Admins } from './admin/admins.ts'
@@ -33,7 +34,7 @@ import { memberRoutes } from './members/routes.ts'
 import { devInviteRoutes, type DevInvitesSettings } from './sign-in/dev-invites.ts'
 import { sessionRefusal } from './sign-in/early-access.ts'
 import { signInRoutes } from './sign-in/routes.ts'
-import { bearerToken, readSessionToken, type SessionOf } from './sign-in/session.ts'
+import { bearerToken, type SessionOf } from './sign-in/session.ts'
 import type { SignInSettings } from './sign-in/sign-in.ts'
 import { templateRoutes } from './templates/routes.ts'
 import { versionRoutes } from './versions/routes.ts'

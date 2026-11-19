@@ -29,6 +29,7 @@ packages/fonts/       the font files we ship, the Google font catalog list and t
 packages/db/          Drizzle tables and migrations (ADR-0009)
 packages/storage/     object storage over the S3 API (ADR-0010)
 packages/sync-token/  tokens the API signs for the sync server
+packages/session-token/ the session tokens the API signs at sign-in, which the web app keeps in a cookie
 packages/config/      shared tsconfig, ESLint and Vitest presets; the dependency-direction and no-Yjs checks
 deploy/               production: the compose file, Caddyfiles and settings the server runs the images with, deploy.sh, which puts a commit live, setup.sh, which sets up the server, and backup.sh and restore.sh, which back the database up each night and restore it; each app's Dockerfile builds its image
 tests/pixels/         Vitest checks: exports against reference renders, the gesture matrix's rows run in Node on the test editor, and speed checks that pnpm test runs alone after the rest (test:speed)

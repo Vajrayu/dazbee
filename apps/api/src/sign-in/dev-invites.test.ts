@@ -5,11 +5,12 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { memberships, users, workspaces } from '@dazbee/db'
 import { DazbeeInvite, Invite, SignedIn, WorkspaceMember } from '@dazbee/schema'
+import { readSessionToken, signSessionToken } from '@dazbee/session-token'
 
 import { createApp } from '../app.ts'
 import { db, request as askTestApp, run, sessionSecret, storage, syncSecret, workos, workspace } from '../test-api.ts'
 import { devInvites } from './dev-invites.ts'
-import { readSessionToken, signSessionToken, tokenSession } from './session.ts'
+import { tokenSession } from './session.ts'
 
 const WEB_URL = 'http://localhost:3100'
 const devWorkspace = { id: `dev-invites-${run}`, name: 'Development invites' }

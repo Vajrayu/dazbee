@@ -7,6 +7,7 @@ import { WorkOS } from '@workos-inc/node'
 
 import { type Db, memberships, newId, type Tx, users, workspaces } from '@dazbee/db'
 import type { SignedIn } from '@dazbee/schema'
+import { signSessionToken } from '@dazbee/session-token'
 
 import type { Admins } from '../admin/admins.ts'
 import { acceptDazbeeInvite, pendingDazbeeInvites, type WaitingDazbeeInvite } from '../admin/dazbee-invites.ts'
@@ -21,7 +22,6 @@ import {
 } from '../members/invites-provider.ts'
 import { workspaceToOpen } from '../workspace/workspace.ts'
 import { type AllowList, type EarlyAccess, earlyAccessRefusal, EarlyAccessRefused } from './early-access.ts'
-import { signSessionToken } from './session.ts'
 
 /** A person WorkOS signed in. */
 export interface SignedInPerson {

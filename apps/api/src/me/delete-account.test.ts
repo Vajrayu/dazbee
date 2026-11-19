@@ -17,9 +17,10 @@ import {
   workspaces,
 } from '@dazbee/db'
 import { AccountDeletion, BrandSummary, DesignSummary, Invite, SignedIn } from '@dazbee/schema'
+import { signSessionToken } from '@dazbee/session-token'
 
 import { createApp } from '../app.ts'
-import { signSessionToken, tokenSession } from '../sign-in/session.ts'
+import { tokenSession } from '../sign-in/session.ts'
 import {
   addPerson,
   addWorkspace,

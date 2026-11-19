@@ -9,12 +9,12 @@ import { Hono } from 'hono'
 
 import { dazbeeInvites, type Db, invites, memberships, newId, type Tx, users, workspaces } from '@dazbee/db'
 import { AcceptDevInvite, type SignedIn } from '@dazbee/schema'
+import { signSessionToken } from '@dazbee/session-token'
 
 import { acceptDazbeeInvite } from '../admin/dazbee-invites.ts'
 import { body, type Env, error } from '../http.ts'
 import { inviteExpiry, type InvitesProvider, type ProviderInvite } from '../members/invites-provider.ts'
 import { workspaceToOpen } from '../workspace/workspace.ts'
-import { signSessionToken } from './session.ts'
 import { acceptInvites } from './sign-in.ts'
 
 /** The stand-in: an invites provider whose invites are accepted through its accept route. */
