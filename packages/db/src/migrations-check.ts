@@ -22,12 +22,26 @@ const DRIZZLE_KIT = join(PACKAGE, 'node_modules', 'drizzle-kit', 'bin.cjs')
 /** What drizzle-kit prints when `tables.ts` holds nothing the migrations don't. */
 const NOTHING_TO_WRITE = 'No schema changes, nothing to migrate'
 
+/** The config keys the check passes to drizzle-kit as flags; any other would make it generate unlike the migration script. */
+const PASSED_KEYS = ['dialect', 'schema', 'out']
+
 /**
- * Runs `drizzle-kit generate` against `tables.ts` on a copy of `migrations`, stopped after
- * `timeoutMs`. They agree only when it ends by itself, prints that it has nothing to write, and
- * leaves the copy as it was.
+ * Checks that the folder's journal, SQL files and snapshots list the same migrations, then runs
+ * `drizzle-kit generate` against `tables.ts` on a copy of `migrations`, stopped after `timeoutMs`.
+ * They agree only when it ends by itself, prints that it has nothing to write, and leaves the copy
+ * as it was.
  */
 export async function checkMigrations(migrations: string, timeoutMs = CHECK_TIMEOUT_MS): Promise<MigrationsCheck> {
+  const unpassed = Object.keys(config).filter((key) => !PASSED_KEYS.includes(key))
+  if (unpassed.length > 0) throw new Error(`the check passes no ${unpassed.join(', ')} from drizzle.config.ts`)
+  const listed = await listedMigrations(migrations)
+  if (listed.sql !== listed.journal || listed.snapshots !== listed.journalNumbers) {
+    return {
+      ok: false,
+      reason: 'the journal, the SQL files and the snapshots list different migrations',
+      output: [`journal: ${listed.journal}`, `SQL files: ${listed.sql}`, `snapshots: ${listed.snapshots}`].join('\n'),
+    }
+  }
   const copy = await mkdtemp(join(tmpdir(), 'dazbee-migrations-'))
   try {
     await cp(migrations, copy, { recursive: true })
@@ -50,6 +64,26 @@ export async function checkMigrations(migrations: string, timeoutMs = CHECK_TIME
     return { ok: true }
   } finally {
     await rm(copy, { recursive: true, force: true })
+  }
+}
+
+/**
+ * The migrations a folder lists, as text to compare: the journal's tags and the SQL files' names,
+ * and the numbers the journal's tags and the snapshots start with. A folder without them lists none.
+ */
+async function listedMigrations(folder: string) {
+  const files = await readdir(folder).catch(() => [])
+  const meta = await readdir(join(folder, 'meta')).catch(() => [])
+  const tags = await readFile(join(folder, 'meta', '_journal.json'), 'utf8')
+    .then((text) => (JSON.parse(text) as { entries: { tag: string }[] }).entries.map((e) => e.tag))
+    .catch(() => [])
+  const list = (names: string[]) => names.toSorted().join(', ')
+  const numbers = (names: string[]) => list(names.map((name) => name.split('_')[0] ?? ''))
+  return {
+    journal: list(tags),
+    journalNumbers: numbers(tags),
+    sql: list(files.filter((f) => f.endsWith('.sql')).map((f) => f.slice(0, -'.sql'.length))),
+    snapshots: numbers(meta.filter((f) => f.endsWith('_snapshot.json'))),
   }
 }
 

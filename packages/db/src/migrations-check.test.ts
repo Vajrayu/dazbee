@@ -21,10 +21,16 @@ async function emptyFolder(): Promise<string> {
   return folder
 }
 
-/** A copy of the migrations whose newest snapshot calls the workspaces' `name` column `title`. */
-async function migrationsWithRenamedColumn(): Promise<string> {
+/** A copy of the migrations, removed after the test. */
+async function copiedMigrations(): Promise<string> {
   const folder = await emptyFolder()
   await cp(MIGRATIONS, folder, { recursive: true })
+  return folder
+}
+
+/** A copy of the migrations whose newest snapshot calls the workspaces' `name` column `title`. */
+async function migrationsWithRenamedColumn(): Promise<string> {
+  const folder = await copiedMigrations()
   const snapshots = (await readdir(join(folder, 'meta'))).filter((file) => file.endsWith('_snapshot.json')).toSorted()
   const newest = join(folder, 'meta', snapshots.at(-1) ?? '')
   const snapshot = JSON.parse(await readFile(newest, 'utf8')) as {
@@ -55,6 +61,16 @@ describe('checkMigrations', () => {
     const check = await checkMigrations(await migrationsWithRenamedColumn())
     expect(check).toMatchObject({ ok: false, reason: 'drizzle-kit generate asked a question or failed' })
   }, 30_000)
+
+  it('fails a folder with a SQL file or snapshot its journal does not list', async () => {
+    const withSql = await copiedMigrations()
+    await writeFile(join(withSql, '0001_unlisted.sql'), 'select 1;')
+    const withSnapshot = await copiedMigrations()
+    await cp(join(withSnapshot, 'meta', '0000_snapshot.json'), join(withSnapshot, 'meta', '0001_snapshot.json'))
+    const reason = 'the journal, the SQL files and the snapshots list different migrations'
+    expect(await checkMigrations(withSql)).toMatchObject({ ok: false, reason })
+    expect(await checkMigrations(withSnapshot)).toMatchObject({ ok: false, reason })
+  })
 
   it('fails a run that goes past its time limit', async () => {
     const check = await checkMigrations(MIGRATIONS, 1)

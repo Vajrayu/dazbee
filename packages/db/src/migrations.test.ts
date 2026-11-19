@@ -14,7 +14,7 @@ import { MIGRATIONS, openDatabase } from './index.ts'
 const DATABASE_URL = process.env.DATABASE_URL ?? 'postgres://dazbee:dazbee-local@127.0.0.1:55432/dazbee'
 
 interface Journal {
-  entries: { tag: string }[]
+  entries: { tag: string; when: number }[]
 }
 
 const journal = JSON.parse(await readFile(join(MIGRATIONS, 'meta', '_journal.json'), 'utf8')) as Journal
@@ -22,7 +22,10 @@ const journal = JSON.parse(await readFile(join(MIGRATIONS, 'meta', '_journal.jso
 /** Databases and folders the cases made, removed once they have run. */
 const made: { databases: string[]; folders: string[] } = { databases: [], folders: [] }
 
-/** The rows every case writes under one migration and reads back after the next: one of each kind of record a person keeps. */
+/**
+ * The rows every case writes under one migration and reads back after the next: one of each kind
+ * of record a person keeps, each found again by its first column.
+ */
 const ROWS = {
   users: { id: 'user-kept', workos_user_id: 'workos-kept', email: 'ann@example.com', name: 'Ann' },
   workspaces: { id: 'workspace-kept', name: 'Harbour' },
@@ -88,14 +91,18 @@ async function firstMigrations(count: number): Promise<string> {
   return folder
 }
 
-/** Applies the migrations `folder`'s journal lists that `url`'s database hasn't run. */
-async function applyMigrations(url: string, folder: string): Promise<void> {
+/** Applies the migrations `folder`'s journal lists that `url`'s database hasn't run; how many it has run in all. */
+async function applyMigrations(url: string, folder: string): Promise<number> {
   const { db, close } = openDatabase(url, { max: 1 })
   try {
     await migrate(db, { migrationsFolder: folder })
   } finally {
     await close()
   }
+  return withClient(url, async (client) => {
+    const result = await client.query<{ count: string }>('select count(*) from drizzle.__drizzle_migrations')
+    return Number(result.rows[0]?.count)
+  })
 }
 
 /** Runs `use` with a client on `url`'s database. */
@@ -121,16 +128,16 @@ async function writeRows(client: pg.Client): Promise<void> {
   }
 }
 
-/** The columns `ROWS` names, read back from each table. */
+/** The columns `ROWS` names, read back from each table's rows with the same first column. */
 async function readRows(client: pg.Client): Promise<Record<string, unknown[]>> {
   const read: Record<string, unknown[]> = {}
   for (const [table, row] of Object.entries(ROWS)) {
+    const [key = '', ...rest] = Object.keys(row)
+    const columns = [key, ...rest].map((c) => `"${c}"`)
     // bigint columns come back as strings, so they compare with the strings written.
-    const result = await client.query(
-      `select ${Object.keys(row)
-        .map((c) => `"${c}"`)
-        .join(', ')} from "${table}"`,
-    )
+    const result = await client.query(`select ${columns.join(', ')} from "${table}" where "${key}" = $1`, [
+      Object.values(row)[0],
+    ])
     read[table] = result.rows
   }
   return read
@@ -139,9 +146,16 @@ async function readRows(client: pg.Client): Promise<Record<string, unknown[]>> {
 const expectedRows = () => Object.fromEntries(Object.entries(ROWS).map(([table, row]) => [table, [row]]))
 
 describe('the migrations', () => {
+  // The migrator runs only migrations newer than the newest it has run, so one listed out of order would never run.
+  it('are listed oldest first, each made after the one before', () => {
+    const times = journal.entries.map((e) => e.when)
+    expect(times).toEqual(times.toSorted((a, b) => a - b))
+    expect(new Set(times).size).toBe(times.length)
+  })
+
   it('apply in order to a fresh database, which then keeps a person, their workspace, brand and design', async () => {
     const url = await freshDatabase()
-    await applyMigrations(url, MIGRATIONS)
+    expect(await applyMigrations(url, MIGRATIONS)).toBe(journal.entries.length)
     await withClient(url, writeRows)
     expect(await withClient(url, readRows)).toEqual(expectedRows())
   }, 60_000)
@@ -151,9 +165,9 @@ describe('the migrations', () => {
     if (index === 0) continue
     it(`${tag} keeps the rows written under the migrations before it`, async () => {
       const url = await freshDatabase()
-      await applyMigrations(url, await firstMigrations(index))
+      expect(await applyMigrations(url, await firstMigrations(index))).toBe(index)
       await withClient(url, writeRows)
-      await applyMigrations(url, await firstMigrations(index + 1))
+      expect(await applyMigrations(url, await firstMigrations(index + 1))).toBe(index + 1)
       expect(await withClient(url, readRows)).toEqual(expectedRows())
     }, 60_000)
   }
