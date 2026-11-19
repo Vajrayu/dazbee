@@ -25,6 +25,9 @@ export class StorageError extends Error {
   }
 }
 
+/** The escapes an S3 answer's XML text uses, by name. */
+const XML_ESCAPES: Record<string, string> = { lt: '<', gt: '>', quot: '"', apos: "'", amp: '&' }
+
 export function openStorage(settings: StorageSettings) {
   const client = new AwsClient({
     accessKeyId: settings.accessKeyId,
@@ -86,6 +89,36 @@ export function openStorage(settings: StorageSettings) {
     return (await send(objectUrl(key), { method: 'HEAD' })).ok
   }
 
+  /** The keys of every object whose key starts with `prefix`, read `pageSize` (at most 1,000) at a time. */
+  async function list(prefix: string, pageSize = 1000): Promise<string[]> {
+    const keys: string[] = []
+    let token: string | null = null
+    do {
+      const url = new URL(`${settings.endpoint}/${settings.bucket}`)
+      url.searchParams.set('list-type', '2')
+      url.searchParams.set('prefix', prefix)
+      url.searchParams.set('max-keys', String(pageSize))
+      if (token) url.searchParams.set('continuation-token', token)
+      const response = await send(url.toString())
+      // A missing bucket is no empty folder.
+      if (response.status === 404) throw new StorageError(404, `storage has no bucket ${settings.bucket}`)
+      const page = await response.text()
+      keys.push(...[...page.matchAll(/<Key>([^<]*)<\/Key>/g)].map((match) => xmlText(match[1] ?? '')))
+      const next = /<IsTruncated>true<\/IsTruncated>/.test(page) && /<NextContinuationToken>([^<]*)</.exec(page)
+      token = next ? xmlText(next[1] ?? '') : null
+    } while (token)
+    return keys
+  }
+
+  /**
+   * Deletes every object in the folder `prefix`, which ends in `/` so it never reaches a folder whose name
+   * only starts the same; an empty folder is left be.
+   */
+  async function deleteFolder(prefix: string) {
+    if (!prefix.endsWith('/') || prefix === '/') throw new Error(`not a folder: ${prefix}`)
+    for (const key of await list(prefix)) await remove(key)
+  }
+
   /** A URL to upload one object of exactly this content type and size. */
   function signedPut(key: string, contentType: string, byteSize: number, expiresInSeconds: number) {
     return sign('PUT', key, expiresInSeconds, { 'content-type': contentType, 'content-length': String(byteSize) })
@@ -101,11 +134,18 @@ export function openStorage(settings: StorageSettings) {
     get,
     delete: remove,
     exists,
+    list,
+    deleteFolder,
     signedPut,
     signedGet,
     /** The unsigned public address of an object, which storage must refuse. */
     publicUrl,
   }
+}
+
+/** Text from an S3 answer's XML, its five escapes undone. */
+function xmlText(text: string): string {
+  return text.replace(/&(lt|gt|quot|apos|amp);/g, (_, name: string) => XML_ESCAPES[name] ?? '')
 }
 
 /**

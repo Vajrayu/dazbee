@@ -1,5 +1,6 @@
 // Settings, in two parts as the final mock's settings: a bold title, then each part in a panel. You
-// holds the person's own settings and workspaces, each but the one they own with Leave; This workspace
+// holds the person's own settings and workspaces, each but the one they own with Leave, and Delete account,
+// which names what deleting would delete; This workspace
 // holds its name, which only an Owner or Admin can change, and its members, whose roles and brands only an
 // Owner or Admin changes. An Owner or Admin also sees Invite, whose brands start at the brand Settings was
 // opened from (`?brand=`), and the pending invites.
@@ -17,6 +18,7 @@ import { cn } from '@/lib/cn.ts'
 import { showsBrandList } from '@/lib/home.ts'
 import { brandWords, type Messages } from '@/lib/i18n/index.ts'
 import { getMessages } from '@/lib/i18n/server.ts'
+import { getAccountDeletion } from '@/lib/server/account.ts'
 import { getAccess, getMe, getWorkspace, listBrands, updateWorkspace } from '@/lib/server/api.ts'
 import { listInvites, listMembers } from '@/lib/server/members.ts'
 import { canInvite, canRenameWorkspace } from '@/lib/settings-rights.ts'
@@ -32,7 +34,7 @@ export default async function SettingsPage({
 }) {
   const [{ workspaceId }, { saved, brand }] = await Promise.all([params, searchParams])
   const accessRead = getAccess(workspaceId)
-  const [t, workspace, brands, me, { role, limited }, members, invites] = await Promise.all([
+  const [t, workspace, brands, me, { role, limited }, members, invites, deletion] = await Promise.all([
     getMessages(),
     getWorkspace(workspaceId),
     listBrands(workspaceId),
@@ -41,6 +43,7 @@ export default async function SettingsPage({
     listMembers(workspaceId),
     // Only an Owner or Admin reads the pending invites: their links let anyone in.
     accessRead.then(({ role }) => (canInvite(role) ? listInvites(workspaceId) : null)),
+    getAccountDeletion(),
   ])
   const here = workspacePath(workspaceId, 'settings')
 
@@ -65,7 +68,7 @@ export default async function SettingsPage({
       <div className="mx-auto max-w-5xl pt-2 md:pt-4">
         <h1 className="font-display text-title font-bold tracking-tight md:leading-tight">{t.settings.title}</h1>
         <div className="mt-6 flex flex-col gap-4 md:mt-8 md:gap-6">
-          <YouPanel t={t} workspaces={me.workspaces} currentId={workspaceId} />
+          <YouPanel t={t} workspaces={me.workspaces} currentId={workspaceId} email={me.email} deletion={deletion} />
           <section
             aria-labelledby="workspace-title"
             data-testid="workspace-panel"

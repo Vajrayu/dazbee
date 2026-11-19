@@ -160,6 +160,40 @@ export const accessRequests = pgTable('access_requests', {
   invitedAt: timestamp('invited_at', { withTimezone: true }),
 })
 
+/**
+ * What a deleted account still has outside the database: a storage folder, a WorkOS organization, user or
+ * invitation.
+ */
+export const PENDING_DELETION_KINDS = [
+  'storage-folder',
+  'workos-organization',
+  'workos-user',
+  'workos-invitation',
+] as const
+export type PendingDeletionKind = (typeof PENDING_DELETION_KINDS)[number]
+
+/**
+ * One thing outside the database that deleting an account left to delete, written in the transaction that
+ * deletes the account's rows and deleted once it is done. The API deletes each after that transaction
+ * commits, and again when it starts, so a failure outside the database is tried until it works.
+ */
+export const pendingDeletions = pgTable(
+  'pending_deletions',
+  {
+    id: text().primaryKey(),
+    kind: text({ enum: PENDING_DELETION_KINDS }).notNull(),
+    /** The storage folder's prefix, ending in `/`, or the WorkOS id. */
+    target: text().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    check(
+      'pending_deletions_kind',
+      sql`${t.kind} in (${sql.raw(PENDING_DELETION_KINDS.map((kind) => `'${kind}'`).join(', '))})`,
+    ),
+  ],
+)
+
 export const brands = pgTable(
   'brands',
   {

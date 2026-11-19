@@ -15,6 +15,14 @@ export function fakeWorkos(people: Record<string, SignedInPerson> = {}) {
     invitations: [] as { id: string; email: string; organizationId: string | null; inviterUserId: string | null }[],
     removed: [] as { organizationId: string; userId: string }[],
     endedSessions: [] as string[],
+    deletedOrganizations: [] as string[],
+    deletedUsers: [] as string[],
+  }
+  /** What WorkOS fails with, by what it is asked to do, until a test sets it back to null. */
+  const failing: { deleteOrganization: Error | null; deleteUser: Error | null; revoke: Error | null } = {
+    deleteOrganization: null,
+    deleteUser: null,
+    revoke: null,
   }
   // Each invitation as WorkOS holds it, by id.
   const invitations = new Map<string, ProviderInvite>()
@@ -38,6 +46,16 @@ export function fakeWorkos(people: Record<string, SignedInPerson> = {}) {
     signOutUrl: (sessionId) => `https://auth.example.test/logout?session_id=${sessionId}`,
     endSession: (sessionId) => {
       made.endedSessions.push(sessionId)
+      return Promise.resolve()
+    },
+    deleteOrganization: (organizationId) => {
+      if (failing.deleteOrganization) return Promise.reject(failing.deleteOrganization)
+      made.deletedOrganizations.push(organizationId)
+      return Promise.resolve()
+    },
+    deleteUser: (workosUserId) => {
+      if (failing.deleteUser) return Promise.reject(failing.deleteUser)
+      made.deletedUsers.push(workosUserId)
       return Promise.resolve()
     },
   }
@@ -69,6 +87,7 @@ export function fakeWorkos(people: Record<string, SignedInPerson> = {}) {
     },
     // WorkOS refuses to revoke an accepted invitation.
     revoke(id) {
+      if (failing.revoke) return Promise.reject(failing.revoke)
       const invitation = read(id)
       if (invitation.state === 'accepted') return Promise.reject(new Error('invitation is already accepted'))
       return invitation.state === 'pending' ? hold({ ...invitation, state: 'revoked' }) : Promise.resolve(invitation)
@@ -87,5 +106,5 @@ export function fakeWorkos(people: Record<string, SignedInPerson> = {}) {
     invitations.set(id, { ...invitation, state: 'accepted', acceptedUserId: workosUserId })
   }
 
-  return { provider, invites, made, people, accept }
+  return { provider, invites, made, people, accept, failing }
 }

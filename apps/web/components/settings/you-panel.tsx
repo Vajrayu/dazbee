@@ -1,9 +1,9 @@
 // Settings' You part: what belongs to the person in every workspace. The language and the theme,
 // each switched at once, and the workspaces they are in, each with its name, their role there and Leave;
-// on the workspace they own, a note to hand over Owner first instead.
+// on the workspace they own, a note to hand over Owner first instead. Delete account sits at the bottom.
 import Link from 'next/link'
 
-import type { Me } from '@dazbee/schema'
+import type { AccountDeletion, Me } from '@dazbee/schema'
 
 import { LocaleSwitch } from '@/components/library/locale-switch.tsx'
 import { ThemeSwitch } from '@/components/library/theme-switch.tsx'
@@ -13,18 +13,25 @@ import { cn } from '@/lib/cn.ts'
 import type { Messages } from '@/lib/i18n/index.ts'
 import { canLeave } from '@/lib/settings-rights.ts'
 
+import { DeleteAccount } from './delete-account.tsx'
 import { LeaveWorkspace } from './leave-workspace.tsx'
 
 export function YouPanel({
   t,
   workspaces,
   currentId,
+  email,
+  deletion,
 }: {
   t: Messages
   /** The person's workspaces, by name, with their role in each. */
   workspaces: Me['workspaces']
   /** The workspace Settings was opened in. */
   currentId: string
+  /** The person's email, which they type to delete their account. */
+  email: string
+  /** What deleting their account would delete, and the workspaces to hand over first. */
+  deletion: AccountDeletion
 }) {
   const s = t.settings
   return (
@@ -76,6 +83,12 @@ export function YouPanel({
           )
         })}
       </ul>
+      <DeleteAccount
+        workspaceId={currentId}
+        email={email}
+        deletion={deletion}
+        elsewhere={workspaces.some((workspace) => !deletion.deletes.some((deleted) => deleted.id === workspace.id))}
+      />
     </section>
   )
 }

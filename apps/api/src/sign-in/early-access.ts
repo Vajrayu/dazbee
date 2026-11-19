@@ -7,7 +7,7 @@
 import { eq } from 'drizzle-orm'
 
 import { type Db, memberships, type Tx, users } from '@dazbee/db'
-import type { SignInRefusal, SignInRefused } from '@dazbee/schema'
+import type { ApiError, SignInRefusal, SignInRefused } from '@dazbee/schema'
 
 import type { Admins } from '../admin/admins.ts'
 import { isRemoved, isRemovedUser } from '../admin/dazbee-invites.ts'
@@ -72,13 +72,16 @@ export async function earlyAccessRefusal(
 }
 
 /**
- * The refusal of a session whose person's access was removed, for `requireSession`, so an open session ends
- * at its next request; null for anyone else.
+ * The refusal of a session whose person is gone, their account deleted, or whose access was removed, for
+ * `requireSession`, so an open session ends at its next request; null for anyone else.
  */
-export function removedRefusal(db: Db, admins: Admins): (userId: string) => Promise<SignInRefused | null> {
+export function sessionRefusal(db: Db, admins: Admins): (userId: string) => Promise<ApiError | SignInRefused | null> {
   const refused = new EarlyAccessRefused('early-access')
-  return async (userId) =>
-    (await isRemovedUser(db, userId, admins)) ? { ...error(refused.message), reason: refused.reason } : null
+  return async (userId) => {
+    const [person] = await db.select({ id: users.id }).from(users).where(eq(users.id, userId))
+    if (!person) return error('Sign in first')
+    return (await isRemovedUser(db, userId, admins)) ? { ...error(refused.message), reason: refused.reason } : null
+  }
 }
 
 /** Ends a refused person's WorkOS session, so their next sign-in can be with another account. */

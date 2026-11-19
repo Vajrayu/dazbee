@@ -45,6 +45,8 @@ const OUTSIDE_A_WORKSPACE = [
   '/auth/sign-out',
   '/auth/dev/accept',
   '/me',
+  '/me/*',
+  '/me/deletion',
   '/access-requests',
 ]
 
@@ -59,6 +61,7 @@ const OWNER_REFUSAL = 'Only the Owner can hand over Owner'
 const MIDDLEWARE_PATHS = [
   '/admin/*',
   '/me',
+  '/me/*',
   '/workspaces/:workspaceId/*',
   '/workspaces/:workspaceId/*',
   '/workspaces/:workspaceId/brands/:brandId/*',

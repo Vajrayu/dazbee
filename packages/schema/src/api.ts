@@ -91,6 +91,31 @@ export const ApiError = z.object({
 })
 export type ApiError = z.infer<typeof ApiError>
 
+/**
+ * What deleting the signed-in person's account would do: the workspaces it deletes, those they own alone, and
+ * the workspaces they own with other members, which they hand over first; deleting is refused while there
+ * are any.
+ */
+export const AccountDeletion = z.object({
+  deletes: z.array(WorkspaceSummary),
+  handOver: z.array(WorkspaceSummary),
+})
+export type AccountDeletion = z.infer<typeof AccountDeletion>
+
+/**
+ * Deleting the account, confirmed with the person's email and the workspaces they were shown it deletes,
+ * which must still be the ones it deletes.
+ */
+export const DeleteAccount = z.object({
+  email: z.string().trim().max(320),
+  deletes: z.array(RecordId).max(1000),
+})
+export type DeleteAccount = z.infer<typeof DeleteAccount>
+
+/** A refused deletion: why, and the workspaces to hand over first when that is why. */
+export const DeleteAccountRefused = ApiError.extend({ handOver: z.array(WorkspaceSummary) })
+export type DeleteAccountRefused = z.infer<typeof DeleteAccountRefused>
+
 /** Lets the editor open one design on the sync server until it expires. */
 export const SyncToken = z.object({
   token: z.string().min(1),

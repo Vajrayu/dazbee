@@ -203,6 +203,25 @@ export const en = {
       ownerNote: 'Hand over Owner to leave',
       cancel: 'Cancel',
     },
+    /**
+     * Deleting the person's account, at the bottom of You: what it deletes, confirmed with their email, or the
+     * workspaces whose Owner they hand over first, each linking to its Members.
+     */
+    deleteAccount: {
+      open: 'Delete account',
+      /** What goes: the workspaces they own alone, named as a list. */
+      deletesOne: 'Deleting your account also deletes {workspaces}, with every brand, design and file in it.',
+      deletesMany: 'Deleting your account also deletes {workspaces}, with every brand, design and file in them.',
+      deletesNone: 'No workspace is deleted with your account: it deletes your name, email and settings.',
+      othersStay: 'What you made in other workspaces stays with them.',
+      typeEmail: 'Type {email} to confirm',
+      confirm: 'Delete my account',
+      deleting: 'Deleting…',
+      cancel: 'Cancel',
+      handOverFirst:
+        'You own these workspaces with other members. Hand over Owner of each before you delete your account:',
+      membersOf: 'Members of {workspace}',
+    },
     invite: {
       title: 'Invite',
       email: 'Email',
@@ -260,6 +279,8 @@ export const en = {
       notOwner: 'Only the Owner can hand over Owner. Reload to see what you can do.',
       notAdmin: 'Only an Admin can be made Owner. Reload to see their role now.',
       handOverFirst: 'Hand over Owner to an Admin before you leave.',
+      wrongEmail: 'That isn’t your account’s email. Type it as shown.',
+      deletionChanged: 'What deleting your account deletes has changed. Read it again below.',
       brandsRefused: 'These brands can’t be given now. Reload to see this member’s role and the brands.',
     },
   },
@@ -1481,6 +1502,8 @@ export const en = {
     unavailable: 'Sign-in is not set up on this server yet.',
     /** A development invite's link that can't be used any more. */
     inviteUnusable: 'This invite has expired, was revoked or was already used. Ask for a new one.',
+    /** Sign-in's note right after the person deleted their account. */
+    deleted: 'Your account is deleted.',
     /** Sign-in refused during early access, followed by `earlyAccessWrite` when there is an address to write to. */
     earlyAccess: 'Dazbee is in early access.',
     earlyAccessWrite: 'Write to {email} to join.',
