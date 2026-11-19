@@ -27,4 +27,6 @@ public/             served as is: images, sprites, favicon, share image
 scripts/            builds the valley images from scripts/valley-source.jpg
 ```
 
-The try-out shows ready-made concepts and says so on screen; nothing is generated live. The pilot form's email goes nowhere until a form service is set on `.studio`'s `data-endpoint`.
+The try-out shows ready-made concepts and says so on screen; nothing is generated live. It asks for an email before the concepts, and posts it as JSON to the URL in `.studio`'s `data-endpoint`; with none set, the email is not sent anywhere.
+
+The pilot form opens the visitor's mail app with a message to the address in the form's `mailto:` action.

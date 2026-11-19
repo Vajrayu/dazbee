@@ -1,8 +1,8 @@
-/* Dazbee landing v2.1 tokens. Palette and type from the moodboard (landing/moodboard): cobalt, cream and peach with one
-   lime accent; an editorial serif with italics, a plain sans for reading, a mono for sizes and a pixel face for tags.
+/* Dazbee landing tokens. Palette and type: cobalt, cream and peach with one
+   lime accent; a heading face with italics, a plain sans for reading, a mono for sizes and a pixel face for tags.
    App chrome values stay from the Dazbee design system; route colours are the example ads' own. */
 :root {
-  --paper: #f7f5ef; /* a near-white ground with room to breathe (v2.1) */
+  --paper: #f7f5ef; /* a near-white ground with room to breathe */
   --paper-2: #efece3;
   --sky: #dcebf5; /* the hero's light blue, reused for soft glows between sections */
   --sky-2: #eaf3f8;
@@ -55,7 +55,7 @@
   --grass-lot: #e7e9d2;
   --red: #d2402b;
 
-  /* headings: Bricolage Grotesque, the app's heading face. --serif keeps its old name. */
+  /* headings: Bricolage Grotesque, the app's heading face */
   --serif: 'Bricolage Grotesque Variable', 'Geist Variable', system-ui, sans-serif;
   --font: 'Geist Variable', system-ui, sans-serif;
   --mono: 'Geist Mono Variable', ui-monospace, Menlo, monospace;

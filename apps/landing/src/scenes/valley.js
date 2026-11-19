@@ -33,7 +33,7 @@ float b4(vec2 a){ return b2(.5 * a) * .25 + b2(a); }
 float b8(vec2 a){ return b4(.5 * a) * .25 + b2(a); }
 
 vec2 cover(vec2 uv){
-  uv = (uv - uZoomAt) / uZoom + uZoomAt;                     // v3.4: a little closer, so the hills open out beside the headline
+  uv = (uv - uZoomAt) / uZoom + uZoomAt;                     // a little closer, so the hills open out beside the headline
   float ra = uRes.x / uRes.y, ri = uImgRes.x / uImgRes.y;
   vec2 s = ra > ri ? vec2(1., ri / ra) : vec2(ra / ri, 1.);
   return uv * s + vec2((1. - s.x) * .5, (1. - s.y) * uPos);

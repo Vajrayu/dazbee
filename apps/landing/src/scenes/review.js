@@ -63,7 +63,10 @@ export function reviewScene(section, { still = false } = {}) {
       intro.play()
       play.play()
     },
-    onEnterBack: () => play.play(),
+    onEnterBack: () => {
+      intro.play()
+      play.play()
+    },
     onLeave: () => play.pause(),
     onLeaveBack: () => play.pause(),
   })

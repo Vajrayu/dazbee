@@ -228,7 +228,11 @@ export function tryOut(section, { still = false } = {}) {
     })
   })
 
+  // one making run at a time: a new one stops the last, whose cards it redraws
+  let making = null
   const make = (which) => {
+    making?.kill()
+    making = null
     which.forEach((i) => state.made.add(i))
     conceptsEl.innerHTML = routes().map(card).join('')
     foot.hidden = true
@@ -239,6 +243,7 @@ export function tryOut(section, { still = false } = {}) {
       return
     }
     const tl = gsap.timeline({ onComplete: done })
+    making = tl
     const total = 1.6 + which.length * 0.35
     LINES.forEach((l, k) =>
       tl.call(

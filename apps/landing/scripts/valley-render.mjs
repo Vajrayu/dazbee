@@ -1,7 +1,8 @@
 // Renders the valley pictures the page uses. Run: node scripts/valley-render.mjs
+import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
 import { skyMask, grade, nearest, bayer, PAPER } from './valley.mjs'
-const here = (p) => new URL(p, import.meta.url).pathname
+const here = (p) => fileURLToPath(new URL(p, import.meta.url))
 const src = here('./valley-source.jpg')
 const out = here('../public/images/')
 

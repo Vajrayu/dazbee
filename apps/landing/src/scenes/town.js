@@ -2,9 +2,9 @@ import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { SPRITES } from './town-sprites.js'
 
-// The town (v3.5 tile map): a 2D isometric city on a fixed grid, like a city-builder game. No 3D: the ground is one
-// flat plane sheared into the 2:1 iso view, and every building is a painted sprite (art/city, warped onto the grid by
-// tools/fit-sprites.py) standing on a lot of exactly its footprint. Things are stacked back to front by their nearest
+// The town (a tile map): a 2D isometric city on a fixed grid, like a city-builder game. No 3D: the ground is one
+// flat plane sheared into the 2:1 iso view, and every building is a painted sprite (public/sprites/city, warped onto the
+// grid, see town-sprites.js) standing on a lot of exactly its footprint. Things are stacked back to front by their nearest
 // corner, so nothing overlaps wrongly. One route's banner is painted onto four of the sprites in the four Meta sizes
 // around the central crossroads. The camera starts close on the first, visits each size, then pulls back.
 //
@@ -615,7 +615,6 @@ export function town(section, { still = false } = {}) {
   cam.to(camera, { ...at(0), duration: 1.4, ease: 'power3.inOut' }).to({}, { duration: 0.5 })
 
   // keep the city moving the whole time it is on screen. Made after the pin, so its end counts the pinned scroll
-  // (made before it, it switched the traffic off part-way through, just as the camera pulled back)
   // shown a screen early, so its first paint happens off screen
   const watch = ScrollTrigger.create({
     trigger: section,

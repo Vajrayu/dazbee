@@ -1,7 +1,7 @@
 import { gsap } from 'gsap'
 import { ROUTES, banner } from '../content/routes.js'
 
-// The concert (v3.2). The brief is on a stage in a dark venue, its six routes turning on a ring around it. Above the
+// The concert. The brief is on a stage in a dark venue, its six routes turning on a ring around it. Above the
 // stage a truss of lights and an LED screen that names the route at the front and the audience it is for. In front of
 // the stage, a crowd seen from behind: every person is one buyer, and one route is made for them. When that route comes
 // round to the front, its people light up wherever they stand, raise a phone and the lights swing onto them.
@@ -269,7 +269,7 @@ export function orbit(root, { still = false } = {}) {
   const size = () => {
     const w = root.clientWidth
     rx = Math.min(430, w * 0.38)
-    ry = rx * 0.22 // a low, wide ring (v3.3): less tall
+    ry = rx * 0.22 // a low, wide ring
     const cw = Math.min(124, Math.max(92, rx * 0.27))
     ch = cw * 1.25
     root.style.setProperty('--rx', `${rx}px`)

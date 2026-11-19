@@ -1,5 +1,5 @@
 // The pilot form: checked on submit, each error under its field, the first one focused.
-// Until a form service is chosen it opens a mail to the stand-in address, so it shows no "sent" line.
+// It sends by opening a mail to the form's mailto: action, so it shows no "sent" line.
 export function initForm(form) {
   if (!form) return
   const status = form.querySelector('[data-status]')

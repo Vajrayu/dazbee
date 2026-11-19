@@ -34,23 +34,21 @@ window.addEventListener('scroll', onScroll, { passive: true })
 onScroll()
 
 const $ = (s) => document.querySelector(s)
-const mm = gsap.matchMedia()
-mm.add({ motion: '(prefers-reduced-motion: no-preference)', still: '(prefers-reduced-motion: reduce)' }, (ctx) => {
-  const still = !ctx.conditions.motion
-  document.documentElement.classList.toggle('is-reduced', still)
 
-  // the scenes, in page order; each one takes care of itself, and under reduced motion shows its end state
-  const scenes = [
-    whyScene($('[data-why]'), { still }),
-    orbit($('[data-orbit]'), { still }),
-    howScene($('[data-how]'), { still }), // made before the town: pinned sections must be made top to bottom
-    town($('[data-town]'), { still }),
-    reviewScene($('[data-review]'), { still }),
-  ]
-  ScrollTrigger.sort()
-  tryOut($('[data-try]'), { still })
-  if (still) return () => scenes.forEach((s) => s?.kill())
+// the scenes build their parts once, so the motion setting is read once, as the page loads
+const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+document.documentElement.classList.toggle('is-reduced', still)
 
+// the scenes, in page order; each one takes care of itself, and under reduced motion shows its end state
+whyScene($('[data-why]'), { still })
+orbit($('[data-orbit]'), { still })
+howScene($('[data-how]'), { still }) // made before the town: pinned sections must be made top to bottom
+town($('[data-town]'), { still })
+reviewScene($('[data-review]'), { still })
+ScrollTrigger.sort()
+tryOut($('[data-try]'), { still })
+
+if (!still) {
   // the hero arrives once: the headline line by line, then the rest
   const h1 = $('[data-split]')
   document.fonts.ready.then(() => {
@@ -64,7 +62,7 @@ mm.add({ motion: '(prefers-reduced-motion: no-preference)', still: '(prefers-red
     })
   })
 
-  const stopValley = initValley($('[data-valley]'))
+  initValley($('[data-valley]'))
 
   // sections rise a touch as they arrive, so one runs into the next instead of cutting
   gsap.utils.toArray('[data-arrive]').forEach((el) => {
@@ -76,9 +74,4 @@ mm.add({ motion: '(prefers-reduced-motion: no-preference)', still: '(prefers-red
       scrollTrigger: { trigger: el, start: 'top 86%', once: true },
     })
   })
-
-  return () => {
-    stopValley()
-    scenes.forEach((s) => s?.kill())
-  }
-})
+}

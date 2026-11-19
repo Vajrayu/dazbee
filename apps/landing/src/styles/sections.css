@@ -1,6 +1,6 @@
-/* Dazbee landing v2.1 sections. Mostly paper with plenty of room; where colour comes in (the sky, the try-out, the
+/* Dazbee landing sections. Mostly paper with plenty of room; where colour comes in (the sky, the try-out, the
    town) it rises out of the paper and goes back into it, so one section runs into the next with no edge.
-   v2.1 is tuned for desktop; the phone and tablet rules below are rough and get a proper pass later. */
+   Tuned for desktop first; the phone and tablet rules follow each section. */
 
 /* ---------- shared section frame ---------- */
 .section {
@@ -175,7 +175,7 @@
   }
 }
 
-/* ---------- 2. product (v3.2): a concert. A dark venue, the brief on a stage, routes on a ring, the crowd in front ---------- */
+/* ---------- 2. product: a concert. A dark venue, the brief on a stage, routes on a ring, the crowd in front ---------- */
 .orbit-sec {
   --venue: #0e1622;
   position: relative;
@@ -1214,7 +1214,7 @@
 .town__over {
   z-index: 3;
 }
-/* v3.2: on the close shots the words come as speech bubbles from the people (and a car) by each banner; the card only
+/* on the close shots the words come as speech bubbles from the people (and a car) by each banner; the card only
    shows once the camera has pulled back over the whole town */
 .town__card {
   transition:
@@ -2435,8 +2435,14 @@
   font-size: 13px;
   color: var(--muted);
 }
+.closing__links .legal a {
+  color: inherit;
+  text-decoration: none;
+}
+.closing__links .legal a:hover {
+  color: var(--ink);
+}
 
-/* ---------- v3 ---------- */
 /* hero: the voxel valley fades into the paper at the bottom; pilot terms under the buttons */
 .terms {
   display: inline-block;
@@ -2613,7 +2619,7 @@
   color: var(--muted);
 }
 
-/* v3.3: the town's speakers. Whoever is talking stands on a soft, pulsing light so the eye finds them */
+/* the town's speakers. Whoever is talking stands on a soft, pulsing light so the eye finds them */
 .t-speaker > .t-shadow {
   transition: background-color 0.3s;
 }

@@ -1,5 +1,5 @@
-// made by tools/fit-sprites.py: each sprite is warped onto the tile grid. (ox, oy) is where its footprint's nearest
-// corner sits in the image, in px at 256 px per tile; W x D is its footprint in tiles. ok = false: regenerate.
+// Each sprite is warped onto the tile grid. (ox, oy) is where its footprint's nearest corner sits in the image, in px
+// at 256 px per tile; W x D is its footprint in tiles. ok = false marks a sprite that does not fit its footprint.
 export const SPRITES = {
   'b-house-a': {
     src: '/sprites/city/buildings/b-house-a.webp',

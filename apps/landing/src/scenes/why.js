@@ -3,7 +3,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { ROUTES, banner } from '../content/routes.js'
 import { ad } from '../ui/cad.js'
 
-// Why (v3.3): a versus slider. Two rows of the same six slots sit on top of each other: underneath, six tweaks of one
+// Why: a versus slider. Two rows of the same six slots sit on top of each other: underneath, six tweaks of one
 // ad (same layout, new colours), all reaching the same one audience; on top, six distinct routes, each with its own
 // audience. The VS handle is the seam: everything right of it is upgraded. Drag it (or use the arrow keys) and each
 // slot it passes upgrades with a little burst. The line under it counts ideas and audiences as you go.
