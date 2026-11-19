@@ -8,7 +8,7 @@ import { syncTokenSecret } from '@dazbee/sync-token'
 import { adminEmails } from './admin/admins.ts'
 import { turnstileCheck } from './admin/turnstile.ts'
 import { createApp } from './app.ts'
-import { finishDeletions } from './me/pending-deletions.ts'
+import { finishSoon } from './me/pending-deletions.ts'
 import { workosInvites } from './members/invites-provider.ts'
 import { devInvites } from './sign-in/dev-invites.ts'
 import { allowList } from './sign-in/early-access.ts'
@@ -55,10 +55,7 @@ const build = process.env.BUILD_ID || 'dev'
 const turnstile = turnstileCheck()
 const app = createApp({ db, storage, sessionOf, syncSecret, build, signIn, invites, admins, turnstile })
 // What deleted accounts left outside the database and couldn't delete then is tried again, beside serving.
-void finishDeletions(db, { storage, signIn: signIn?.provider ?? null, invites: invites.workos }).then(
-  (left) => left > 0 && console.error(`${left} pending deletions are left for the next start`),
-  (e: unknown) => console.error('pending deletions could not be read', e),
-)
+finishSoon(db, { storage, signIn: signIn?.provider ?? null, invites: invites.workos })
 const ways =
   [
     signIn && `WorkOS sign-in${signIn.allowed || admins.size > 0 ? ' in early access' : ''}`,

@@ -43,11 +43,11 @@ export async function recordDeletions(tx: Tx, deletions: PendingDeletion[]): Pro
 }
 
 /**
- * Deletes what the rows `ids` name now, without waiting for it, and again once storage folders have settled;
- * a failure is logged and left for the next start.
+ * Deletes what the rows `ids` name, or every row when given none, as the API does when it starts: now, without
+ * waiting for it, and again once storage folders have settled. A failure is logged and left for the next start.
  */
-export function finishSoon(db: Db, deleters: Deleters, ids: string[]): void {
-  if (ids.length === 0) return
+export function finishSoon(db: Db, deleters: Deleters, ids?: string[]): void {
+  if (ids?.length === 0) return
   const finish = () => {
     finishDeletions(db, deleters, ids).catch((e: unknown) => console.error('pending deletions failed', e))
   }

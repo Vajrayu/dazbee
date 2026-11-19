@@ -4,8 +4,9 @@
 // workspaces the person owns alone, by name, and that what they made in other workspaces stays. They type
 // their email to confirm, and once it is deleted, sign-in opens. While they own a workspace with other
 // members, the part names those workspaces instead, each linking to its Members, to hand over Owner first.
+// Cancel and Esc close the part.
 import Link from 'next/link'
-import { useId, useState, useTransition } from 'react'
+import { useId, useRef, useState, useTransition } from 'react'
 
 import type { AccountDeletion } from '@dazbee/schema'
 
@@ -47,14 +48,18 @@ export function DeleteAccount({
   const field = useId()
   const names = new Intl.ListFormat(locale, { type: 'conjunction' }).format(deletion.deletes.map((w) => w.name))
   const confirmed = typed.trim().toLowerCase() === email.toLowerCase()
+  const opener = useRef<HTMLButtonElement>(null)
+  // Closing, by Cancel or Esc, gives the focus back to Delete account.
   const close = () => {
     setOpen(false)
     setTyped('')
     setRefusal(null)
+    opener.current?.focus()
   }
   return (
     <div data-testid="delete-account" className="mt-7 border-t border-line pt-5">
       <button
+        ref={opener}
         type="button"
         aria-expanded={open}
         aria-controls={part}
@@ -64,7 +69,13 @@ export function DeleteAccount({
         {s.open}
       </button>
       {open && (
-        <div id={part} className="mt-3 flex max-w-xl flex-col gap-3">
+        <div
+          id={part}
+          className="mt-3 flex max-w-xl flex-col gap-3"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') close()
+          }}
+        >
           {deletion.handOver.length > 0 ? (
             <>
               <p className="text-small leading-snug">{s.handOverFirst}</p>
