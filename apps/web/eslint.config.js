@@ -11,6 +11,7 @@ const BRIEF = 'components/brief/'
 const BRAND_KIT = 'components/brand-kit/'
 const EDITOR = 'components/editor/'
 const SETTINGS = 'components/settings/'
+const PILOT = 'components/pilot/'
 const ACTIONS = String.raw`app/(.+/)?actions\.ts$`
 const LIB = 'lib/[^/]+$'
 const I18N = 'lib/i18n/'
@@ -34,6 +35,7 @@ const FOLDERS = [
   [['components/brand-kit/**'], [BRAND_KIT, UI, LIB, I18N, ACTIONS]],
   [['components/editor/**'], [EDITOR, UI, BRAND_KIT, LIB, I18N, LIB_EDITOR, ACTIONS]],
   [['components/settings/**'], [SETTINGS, UI, LIBRARY, LIB, I18N, SERVER, ACTIONS]],
+  [['components/pilot/**'], [PILOT, SETTINGS, UI, LIB, I18N, SERVER, ACTIONS]],
   [['lib/*'], [LIB, I18N]],
   [['lib/editor/**'], [LIB_EDITOR, LIB, I18N]],
   [['lib/server/**'], [SERVER, LIB, I18N]],

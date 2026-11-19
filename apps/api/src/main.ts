@@ -5,6 +5,8 @@ import { migrateDatabase, openDatabase } from '@dazbee/db'
 import { openStorage, storageSettings } from '@dazbee/storage'
 import { syncTokenSecret } from '@dazbee/sync-token'
 
+import { adminEmails } from './admin/admins.ts'
+import { turnstileCheck } from './admin/turnstile.ts'
 import { createApp } from './app.ts'
 import { workosInvites } from './members/invites-provider.ts'
 import { devInvites } from './sign-in/dev-invites.ts'
@@ -23,8 +25,11 @@ if (process.env.STORAGE_CREATE_BUCKET === 'on') await storage.ensureBucket()
 const workos = workosSettings()
 const dev = process.env.DAZBEE_DEV_SESSION === 'on'
 if (dev && process.env.NODE_ENV === 'production') throw new Error('DAZBEE_DEV_SESSION is never on in production')
-// While ALLOWED_EMAILS names any email, sign-up is in early access: only those it allows get in.
-const signIn = workos ? { provider: workosProvider(workos), secret: sessionSecret(), allowed: allowList() } : null
+// While ALLOWED_EMAILS or ADMIN_EMAILS names any email, sign-up is in early access: only those it allows,
+// and those an admin invites, get in.
+const admins = adminEmails()
+const allowed = allowList()
+const signIn = workos ? { provider: workosProvider(workos), secret: sessionSecret(), allowed, admins } : null
 
 const { db, close } = openDatabase(databaseUrl)
 await migrateDatabase(db)
@@ -45,9 +50,14 @@ const invites = {
 }
 // The image sets BUILD_ID to the commit it was built from; a server run from a checkout is `dev`.
 const build = process.env.BUILD_ID || 'dev'
-const app = createApp({ db, storage, sessionOf, syncSecret, build, signIn, invites })
+// Requests to join pass Cloudflare Turnstile's check when TURNSTILE_SECRET_KEY is set.
+const turnstile = turnstileCheck()
+const app = createApp({ db, storage, sessionOf, syncSecret, build, signIn, invites, admins, turnstile })
 const ways =
-  [signIn && `WorkOS sign-in${signIn.allowed ? ' in early access' : ''}`, dev && 'the development session']
+  [
+    signIn && `WorkOS sign-in${signIn.allowed || admins.size > 0 ? ' in early access' : ''}`,
+    dev && 'the development session',
+  ]
     .filter(Boolean)
     .join(' and ') || 'no way to sign in'
 const server = serve({ fetch: app.fetch, port }, () => console.log(`api on http://localhost:${port} with ${ways}`))

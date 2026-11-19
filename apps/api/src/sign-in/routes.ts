@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 
 import type { Db } from '@dazbee/db'
 import {
+  CallbackUrl,
   CompleteSignIn,
   InvitationToken,
   type SignedIn,
@@ -29,7 +30,8 @@ export function signInRoutes({
   const app = new Hono<Env>()
 
   // Sign-in. The web app's /login asks for the link, carrying the token of an invite the person came
-  // from, and its /callback hands back the code.
+  // from, and its /callback hands back the code. A site of the web app with a /callback of its own, the
+  // early-access admin page's, names it as `redirectUri`.
   app.get('/auth/sign-in-url', (c) => {
     if (!signIn) return c.json(error('Sign-in is not set up'), 404)
     const state = c.req.query('state') ?? ''
@@ -37,7 +39,11 @@ export function signInRoutes({
     const invitationToken = InvitationToken.optional().safeParse(c.req.query('invitationToken'))
     if (!invitationToken.success)
       return c.json(error(invitationToken.error.issues.map((i) => i.message).join('; ')), 400)
-    return c.json({ url: signIn.provider.signInUrl(state, invitationToken.data) } satisfies SignInLink)
+    const redirectUri = CallbackUrl.optional().safeParse(c.req.query('redirectUri'))
+    if (!redirectUri.success) return c.json(error(redirectUri.error.issues.map((i) => i.message).join('; ')), 400)
+    return c.json({
+      url: signIn.provider.signInUrl(state, invitationToken.data, redirectUri.data),
+    } satisfies SignInLink)
   })
 
   app.post('/auth/callback', async (c) => {

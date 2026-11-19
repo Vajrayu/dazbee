@@ -1,6 +1,6 @@
-// The database's tables. Every row has a workspace, and every design and asset a brand of that
-// workspace (ADR-0011); the API scopes every query by them. After a change, regenerate the one initial
-// migration (docs/agents/code-layout.md, Data).
+// The database's tables. Every row of a workspace's records has its workspace, and every design and asset a
+// brand of that workspace (ADR-0011); the API scopes every query by them. Early access's Dazbee invites and
+// waiting list belong to no workspace. Each change comes with its migration (docs/agents/code-layout.md, Data).
 import { sql } from 'drizzle-orm'
 import {
   bigint,
@@ -114,6 +114,51 @@ export const invites = pgTable(
   },
   (t) => [index('invites_workspace_email').on(t.workspaceId, t.email), index('invites_email').on(t.email)],
 )
+
+/**
+ * An admin's invite of an email to Dazbee during early access, a Dazbee invite: a provider's invitation to
+ * no organization, whose person signs up and gets a workspace of their own. Its states are a workspace
+ * invite's: being sent while it has no provider id, pending once sent while it is neither accepted nor
+ * revoked and `expires_at` is ahead, then accepted, revoked or expired. At most one per email is being sent
+ * or pending, which the API checks in the transaction that writes. An accepted one with `removed_at` is a
+ * person whose access an admin removed: sign-in refuses them and the API answers their requests with 401.
+ */
+export const dazbeeInvites = pgTable(
+  'dazbee_invites',
+  {
+    id: text().primaryKey(),
+    /** Lower-cased. */
+    email: text().notNull(),
+    /** The admin who invited; null once that person is gone. */
+    invitedBy: text('invited_by').references(() => users.id, { onDelete: 'set null' }),
+    /** The invite's id with its provider: WorkOS's invitation, or the development stand-in's; null while being sent. */
+    providerInviteId: text('provider_invite_id'),
+    /** The link that accepts it; null while being sent. */
+    link: text(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    removedAt: timestamp('removed_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index('dazbee_invites_email').on(t.email)],
+)
+
+/**
+ * A request to join Dazbee, sent from /login during early access: the waiting list. One per email, which a
+ * new request updates; `invited_at` is set once an admin sends its email a Dazbee invite.
+ */
+export const accessRequests = pgTable('access_requests', {
+  id: text().primaryKey(),
+  /** Lower-cased. */
+  email: text().notNull().unique(),
+  name: text().notNull(),
+  company: text().notNull(),
+  /** What they will make with Dazbee; empty when they left it out. */
+  note: text().notNull().default(''),
+  requestedAt: timestamp('requested_at', { withTimezone: true }).notNull().defaultNow(),
+  invitedAt: timestamp('invited_at', { withTimezone: true }),
+})
 
 export const brands = pgTable(
   'brands',

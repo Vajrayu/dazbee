@@ -6,7 +6,7 @@ import LoginPage from './page.tsx'
 
 vi.mock('server-only', () => ({}))
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
-vi.mock('./actions.ts', () => ({ start: vi.fn() }))
+vi.mock('./actions.ts', () => ({ start: vi.fn(), requestToJoin: vi.fn() }))
 
 const { cookies } = await import('next/headers')
 
@@ -75,5 +75,11 @@ describe('LoginPage', () => {
   it('says any other sign-in failed, and shows no notice without one', async () => {
     expect(await noticeOf({ error: '1' })).toBe('That sign-in did not work. Try again.')
     expect(await noticeOf({})).toBeNull()
+  })
+
+  it('offers Request access under the early-access notice only', async () => {
+    expect(await render({ error: 'early-access' })).toContain('data-testid="request-access"')
+    expect(await render({ error: 'open-invite' })).not.toContain('data-testid="request-access"')
+    expect(await render({})).not.toContain('data-testid="request-access"')
   })
 })

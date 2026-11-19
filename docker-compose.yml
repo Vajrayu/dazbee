@@ -55,8 +55,12 @@ services:
       WORKOS_CLIENT_ID: ${WORKOS_CLIENT_ID:-}
       WORKOS_REDIRECT_URI: ${WORKOS_REDIRECT_URI:-}
       SESSION_SECRET: ${SESSION_SECRET:-local-only-session-secret-0000000}
-      # Early access's allow-list; empty lets anyone sign up.
+      # Early access's allow-list and admins; with both empty, anyone may sign up.
       ALLOWED_EMAILS: ${ALLOWED_EMAILS:-}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      # Request access's Turnstile check; empty skips it. The web app, run with next dev, reads PILOT_HOST and
+      # TURNSTILE_SITE_KEY from its own environment.
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
       STORAGE_ENDPOINT: http://storage:9000
       STORAGE_BUCKET: dazbee
       STORAGE_ACCESS_KEY_ID: dazbee

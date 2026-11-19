@@ -34,7 +34,10 @@ const MANAGER_ONLY = [
 /** The routes only the Owner may call: handing over Owner. */
 const OWNER_ONLY = ['POST /workspaces/:workspaceId/members/:userId/owner']
 
-/** The paths outside a workspace: the health check, sign-in's, the development invites' accept and the person's own. */
+/**
+ * The paths outside a workspace: the health check, sign-in's, the development invites' accept, the person's
+ * own and the request to join. Early access's admin routes, under /admin, are checked in `admin/routes.test.ts`.
+ */
 const OUTSIDE_A_WORKSPACE = [
   '/health',
   '/auth/sign-in-url',
@@ -42,6 +45,7 @@ const OUTSIDE_A_WORKSPACE = [
   '/auth/sign-out',
   '/auth/dev/accept',
   '/me',
+  '/access-requests',
 ]
 
 const WRITER_REFUSAL = 'Only an Owner, Admin or Editor can do this'
@@ -53,24 +57,28 @@ const OWNER_REFUSAL = 'Only the Owner can hand over Owner'
  * as it would an `all` route.
  */
 const MIDDLEWARE_PATHS = [
+  '/admin/*',
   '/me',
   '/workspaces/:workspaceId/*',
   '/workspaces/:workspaceId/*',
   '/workspaces/:workspaceId/brands/:brandId/*',
 ]
 
-/** Every route that changes something, as `METHOD /path`, read from the app so a route added later is in it. */
-const CHANGES = [
-  ...new Set(
-    app.routes
-      .filter((r) => !['ALL', 'GET', 'HEAD'].includes(r.method) && !r.path.startsWith('/auth/'))
-      .map((r) => `${r.method} ${r.path}`),
-  ),
-].filter((route) => !READ_ONLY.includes(route) && !OWN_MEMBERSHIP.includes(route))
-
 /** Whether `path` is a workspace's own path or below it. */
 const inAWorkspace = (path: string) =>
   path === '/workspaces/:workspaceId' || path.startsWith('/workspaces/:workspaceId/')
+
+/**
+ * Every route of a workspace that changes something, as `METHOD /path`, read from the app so a route added
+ * later is in it.
+ */
+const CHANGES = [
+  ...new Set(
+    app.routes
+      .filter((r) => !['ALL', 'GET', 'HEAD'].includes(r.method) && inAWorkspace(r.path))
+      .map((r) => `${r.method} ${r.path}`),
+  ),
+].filter((route) => !READ_ONLY.includes(route) && !OWN_MEMBERSHIP.includes(route))
 
 /** Every route of a workspace, whatever its method, as `METHOD /path`, read from the app. */
 const IN_A_WORKSPACE = [
@@ -150,10 +158,10 @@ describe('roles', () => {
 })
 
 describe('workspaces', () => {
-  it('has no route outside a workspace but the health check, /me, sign-in and the development accept, whatever route is added later', () => {
+  it('has no route outside a workspace but the health check, /me, sign-in, the development accept, the request to join and /admin, whatever route is added later', () => {
     const outside = app.routes
       .map((r) => r.path)
-      .filter((path) => !inAWorkspace(path) && !OUTSIDE_A_WORKSPACE.includes(path))
+      .filter((path) => !inAWorkspace(path) && !OUTSIDE_A_WORKSPACE.includes(path) && !path.startsWith('/admin/'))
     expect([...new Set(outside)]).toEqual([])
   })
 

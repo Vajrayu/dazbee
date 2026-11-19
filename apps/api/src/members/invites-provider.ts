@@ -1,6 +1,7 @@
-// Who sends a workspace's invites and says whether one was accepted: WorkOS for a workspace with a WorkOS
-// organization, the development stand-in for one without. The provider's own state of an invite never
-// decides whether it is pending; the invite's `expires_at` in our table does.
+// Who sends a workspace's invites, and Dazbee invites, and says whether one was accepted: WorkOS for a
+// workspace with a WorkOS organization, the development stand-in for one without; WorkOS for Dazbee
+// invites when sign-in is set up, else the stand-in. The provider's own state of an invite never decides
+// whether it is pending; the invite's `expires_at` in our table does.
 import { type Invitation, WorkOS } from '@workos-inc/node'
 
 import type { WorkosSettings } from '../sign-in/sign-in.ts'
@@ -18,8 +19,11 @@ export interface ProviderInvite {
 
 /** What the API needs from whoever sends invites; tests give it a stand-in that never calls out. */
 export interface InvitesProvider {
-  /** Sends an invite to the organization, naming who invited; null is the development workspace's. */
-  invite(email: string, organizationId: string | null, inviterWorkosUserId: string): Promise<ProviderInvite>
+  /**
+   * Sends an invite to the organization, naming who invited. With no organization it is a Dazbee invite,
+   * or with the stand-in an invite to a workspace without one, such as the development workspace.
+   */
+  invite(email: string, organizationId: string | null, inviterWorkosUserId: string | null): Promise<ProviderInvite>
   resend(id: string): Promise<ProviderInvite>
   /** Revokes a pending invite; one no longer pending is answered as it is, accepted ones included. */
   revoke(id: string): Promise<ProviderInvite>
@@ -47,15 +51,19 @@ export function invitesProviderFor(providers: InvitesProviders, organizationId: 
   return organizationId ? providers.workos : providers.dev
 }
 
+/** The provider of Dazbee invites: WorkOS when sign-in is set up, else the stand-in; null when there is neither. */
+export function dazbeeInvitesProvider(providers: InvitesProviders): InvitesProvider | null {
+  return providers.workos ?? providers.dev
+}
+
 export function workosInvites({ apiKey, clientId }: WorkosSettings): InvitesProvider {
   const { userManagement } = new WorkOS(apiKey, { clientId })
   return {
     async invite(email, organizationId, inviterUserId) {
-      if (!organizationId) throw new Error('A WorkOS invite needs the workspace’s organization')
-      // No role slug: roles are ours (memberships.role), and WorkOS only needs to know the person belongs.
-      return providerInvite(
-        await userManagement.sendInvitation({ email, organizationId, inviterUserId, expiresInDays: INVITE_DAYS }),
-      )
+      // No role slug: roles are ours (memberships.role), and WorkOS only needs to know the person belongs. A
+      // Dazbee invite names no organization and no inviter, so WorkOS's email comes from Dazbee itself.
+      const to = organizationId ? { organizationId, ...(inviterUserId ? { inviterUserId } : {}) } : {}
+      return providerInvite(await userManagement.sendInvitation({ email, ...to, expiresInDays: INVITE_DAYS }))
     },
     resend: async (id) => providerInvite(await userManagement.resendInvitation(id)),
     async revoke(id) {

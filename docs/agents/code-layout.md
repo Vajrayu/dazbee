@@ -152,6 +152,7 @@ Each folder may import only what this table lists, plus npm packages and `@dazbe
 | `components/brand-kit/`                                          | `components/ui/`, `lib/` root files, `lib/i18n/`                                                                                 |
 | `components/editor/`                                             | `components/ui/`, `components/brand-kit/` (the Brand flyout shows the kit editor), `lib/` root files, `lib/i18n/`, `lib/editor/` |
 | `components/settings/`                                           | `components/ui/`, `components/library/`, `lib/` root files, `lib/i18n/`, `lib/server/`                                           |
+| `components/pilot/`                                              | `components/ui/`, `components/settings/` (the invite rows and confirm menu), `lib/` root files, `lib/i18n/`, `lib/server/`       |
 | `lib/` root files                                                | other `lib/` root files, `lib/i18n/`                                                                                             |
 | `lib/editor/`                                                    | `lib/` root files, `lib/i18n/`                                                                                                   |
 | `lib/server/`                                                    | `lib/` root files, `lib/i18n/`                                                                                                   |

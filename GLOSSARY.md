@@ -17,12 +17,24 @@ An Owner's or Admin's offer to an email address to become a member of their work
 _Avoid_: Invitation, share
 
 **Early access**:
-The time before sign-up opens to everyone: only people on the allow-list, people who are already members and people accepting an invite get in. Anyone else is told Dazbee is in early access, or to open the invite waiting in their email, and gets no account or workspace.
+The time before sign-up opens to everyone: only admins, people on the allow-list, people who are already members and people accepting an invite (a workspace's or a Dazbee invite) get in. Anyone else is told Dazbee is in early access, or to open the invite waiting in their email, and gets no account or workspace.
 _Avoid_: Beta, waitlist
 
 **Allow-list**:
 The emails allowed to sign up during early access, set on the API. A person gets in by it only with an email WorkOS verified; an empty list lets anyone sign up.
 _Avoid_: Whitelist, waitlist
+
+**Admin** (of Dazbee):
+A Dazbee staff member, named by email in the API's `ADMIN_EMAILS`, who uses the early-access admin page at `pilot.dazbee.com`: sends Dazbee invites, works the waiting list and removes a person's access. Always let in at sign-in. Not a workspace role: a workspace's Admin is a member (see Member).
+_Avoid_: Staff, superuser, operator
+
+**Dazbee invite**:
+An admin's invite of an email to Dazbee itself during early access, a WorkOS invitation to no organization. Its person signs up and gets a workspace of their own, then adds their team with a workspace's invites. Removing them keeps their account and designs and refuses their sign-in; inviting them again lets them back in.
+_Avoid_: Platform invite, beta invite (a workspace's invite is an Invite)
+
+**Waiting list**:
+The requests to join Dazbee sent from `/login` during early access, one per email, each with a name, a company and what they will make. An admin sends a request's email a Dazbee invite, which takes it off the list, or dismisses it.
+_Avoid_: Waitlist, queue, signups
 
 **Session**:
 A signed-in person, in any of their workspaces at once: each page names the workspace it shows, and every API route checks that the person is a member there and may see the brand. It ends when they sign out or after seven days; stopping being a member of a workspace refuses their next request there at once, and closes a design they have open within ten minutes.

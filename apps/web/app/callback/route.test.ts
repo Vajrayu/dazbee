@@ -1,7 +1,7 @@
 // The WorkOS callback's route handler, run in Node with the request's cookies held in a map and the
 // API's sign-in stubbed; a refusal keeps no session in that map or on its response.
 import { NextRequest } from 'next/server'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { completeSignIn, SESSION_COOKIE } from '@/lib/server/api.ts'
 import { INVITATION_COOKIE, STATE_COOKIE } from '@/lib/server/sign-in.ts'
@@ -33,6 +33,10 @@ beforeEach(() => {
     expiresAt: Date.UTC(2099, 0, 1),
     open: 'workspace-1',
   })
+})
+
+afterEach(() => {
+  vi.unstubAllEnvs()
 })
 
 describe('GET /callback', () => {
@@ -106,5 +110,19 @@ describe('GET /callback', () => {
     expect(jar.has(SESSION_COOKIE)).toBe(false)
     expect(response.cookies.get(SESSION_COOKIE)).toBeUndefined()
     expect(completeSignIn).not.toHaveBeenCalled()
+  })
+
+  it("opens the early-access admin page, the pilot host's /, after a sign-in there", async () => {
+    vi.stubEnv('PILOT_HOST', 'pilot.example.com')
+    jar.set(STATE_COOKIE, 'the-one-we-started')
+
+    const response = await GET(
+      new NextRequest('https://pilot.example.com/callback?code=good&state=the-one-we-started', {
+        headers: { host: 'pilot.example.com' },
+      }),
+    )
+
+    expect([response.status, response.headers.get('location')]).toEqual([303, '/'])
+    expect(jar.get(SESSION_COOKIE)).toBe('a-session-token')
   })
 })

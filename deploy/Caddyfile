@@ -1,5 +1,6 @@
-# Caddy in front of the production stack: app.dazbee.com to the web app, sync.dazbee.com to the sync
-# server, and http://caddy:8080, which only the containers reach, to the API. Both public sites use
+# Caddy in front of the production stack: app.dazbee.com and pilot.dazbee.com (the early-access admin page)
+# to the web app, sync.dazbee.com to the sync server, and http://caddy:8080, which only the containers reach,
+# to the API. Both public sites use
 # Cloudflare's origin certificate, from the certs/ folder beside compose's .env, as origin.pem and
 # origin.key.
 #
@@ -30,6 +31,13 @@
 }
 
 app.dazbee.com {
+	tls /etc/caddy/certs/origin.pem /etc/caddy/certs/origin.key
+	reverse_proxy router:3000 {
+		import router
+	}
+}
+
+pilot.dazbee.com {
 	tls /etc/caddy/certs/origin.pem /etc/caddy/certs/origin.key
 	reverse_proxy router:3000 {
 		import router

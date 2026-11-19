@@ -373,6 +373,17 @@ export type SignInLink = z.infer<typeof SignInLink>
 export const InvitationToken = z.string().regex(/^[\w-]{1,256}$/, 'invitationToken: 1–256 letters, digits, _ and -')
 export type InvitationToken = z.infer<typeof InvitationToken>
 
+/**
+ * Where WorkOS sends a person back after sign-in, when a site other than the web app's own asks, such as the
+ * early-access admin page's: an http or https address whose path is `/callback`, with no query. WorkOS refuses one not
+ * registered with it.
+ */
+export const CallbackUrl = z
+  .url({ protocol: /^https?$/, error: 'redirectUri: an http or https address' })
+  .max(256)
+  .refine((url) => /^https?:\/\/[^/?#]+\/callback$/.test(url), 'redirectUri: the path is /callback, with no query')
+export type CallbackUrl = z.infer<typeof CallbackUrl>
+
 export const CompleteSignIn = z.object({ code: z.string().min(1).max(512) })
 export type CompleteSignIn = z.infer<typeof CompleteSignIn>
 

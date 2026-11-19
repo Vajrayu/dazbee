@@ -12,7 +12,7 @@ export function fakeWorkos(people: Record<string, SignedInPerson> = {}) {
   const made = {
     organizations: [] as { id: string; name: string; workspaceId: string }[],
     members: [] as { organizationId: string; userId: string }[],
-    invitations: [] as { id: string; email: string; organizationId: string | null; inviterUserId: string }[],
+    invitations: [] as { id: string; email: string; organizationId: string | null; inviterUserId: string | null }[],
     removed: [] as { organizationId: string; userId: string }[],
     endedSessions: [] as string[],
   }
@@ -20,8 +20,8 @@ export function fakeWorkos(people: Record<string, SignedInPerson> = {}) {
   const invitations = new Map<string, ProviderInvite>()
 
   const provider: SignInProvider = {
-    signInUrl: (state, invitationToken) =>
-      `https://auth.example.test/authorize?state=${state}${invitationToken ? `&invitation_token=${invitationToken}` : ''}`,
+    signInUrl: (state, invitationToken, redirectUri) =>
+      `https://auth.example.test/authorize?state=${state}${invitationToken ? `&invitation_token=${invitationToken}` : ''}${redirectUri ? `&redirect_uri=${encodeURIComponent(redirectUri)}` : ''}`,
     authenticate: (code) => {
       const person = people[code]
       return person ? Promise.resolve(person) : Promise.reject(new Error('invalid_grant'))

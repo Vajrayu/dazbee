@@ -245,6 +245,20 @@ export async function acceptInvite(db: Db | Tx, inviteId: string, userId: string
   })
 }
 
+/**
+ * Revokes the invite with its provider, answering the state it is left in; a provider that refuses one
+ * no longer pending, as WorkOS does, is asked for its state instead.
+ */
+export async function revokeWithProvider(provider: InvitesProvider, id: string): Promise<ProviderInvite['state']> {
+  try {
+    return (await provider.revoke(id)).state
+  } catch (e) {
+    const { state } = await provider.read(id)
+    if (state === 'pending') throw e
+    return state
+  }
+}
+
 async function isMember(db: Db | Tx, workspaceId: string, email: string): Promise<boolean> {
   const [member] = await db
     .select({ userId: memberships.userId })
@@ -253,20 +267,6 @@ async function isMember(db: Db | Tx, workspaceId: string, email: string): Promis
     .where(and(eq(memberships.workspaceId, workspaceId), eq(sql`lower(${users.email})`, email)))
     .limit(1)
   return Boolean(member)
-}
-
-/**
- * Revokes the invite with its provider, answering the state it is left in; a provider that refuses one
- * no longer pending, as WorkOS does, is asked for its state instead.
- */
-async function revokeWithProvider(provider: InvitesProvider, id: string): Promise<ProviderInvite['state']> {
-  try {
-    return (await provider.revoke(id)).state
-  } catch (e) {
-    const { state } = await provider.read(id)
-    if (state === 'pending') throw e
-    return state
-  }
 }
 
 /**

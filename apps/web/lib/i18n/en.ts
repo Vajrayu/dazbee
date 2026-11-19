@@ -1422,6 +1422,54 @@ export const en = {
   menu: { backFrom: 'Back from {menu}' },
   language: { label: 'Language' },
   account: { open: 'Your account', settings: 'Settings' },
+  /** Early access's admin page, at pilot.dazbee.com: who is invited to Dazbee and who asked to join. */
+  pilot: {
+    title: 'Early access',
+    lead: 'Invite people to Dazbee. Each gets a workspace of their own.',
+    invite: {
+      title: 'Invite',
+      email: 'Email',
+      emailPlaceholder: 'name@company.com',
+      send: 'Invite',
+      sending: 'Inviting…',
+      sent: 'Invite sent to {email}.',
+      badEmail: 'Enter an email address, such as ada@example.com.',
+    },
+    waiting: {
+      title: 'Waiting list',
+      empty: 'No one is waiting.',
+      asked: 'Asked {date}',
+      invite: 'Invite',
+      inviteFor: 'Invite {email}',
+      dismiss: 'Dismiss',
+      dismissFor: 'Dismiss the request from {email}',
+    },
+    pending: {
+      title: 'Pending invites',
+      cancel: 'Cancel',
+      cancelFor: 'Cancel the invite to {email}',
+    },
+    joined: {
+      title: 'Joined',
+      empty: 'No one has joined yet.',
+      since: 'Joined {date}',
+      remove: 'Remove',
+      removeFor: 'Remove {email}',
+      question: 'They won’t be able to sign in. Their designs are kept.',
+      keep: 'Cancel',
+    },
+    /** Why the API refused a change, by what it means. */
+    /** Why a change of an invite, a person or a request to {email} was refused. */
+    refused: '{email}: {error}',
+    refusals: {
+      hasAccount: '{email} already has an account.',
+      gone: 'This invite was accepted, cancelled or has expired.',
+      accepted: 'This invite was already accepted.',
+      tryAgain: 'This invite is being sent or just changed. Try again in a moment.',
+      personGone: 'This person was already removed.',
+      requestGone: 'This request was already invited or dismissed.',
+    },
+  },
   signIn: {
     title: 'Sign in to Dazbee',
     /** The sign-in page's headline, in two lines. */
@@ -1438,6 +1486,27 @@ export const en = {
     earlyAccessWrite: 'Write to {email} to join.',
     /** Sign-in refused a person with a pending invite who didn't sign in through it. */
     openInvite: 'Open the invite in your email to join.',
+    /** The early-access notice's button, which opens the request to join. */
+    requestAccess: 'Request access',
+    /** The request to join, a short form under the early-access notice. */
+    request: {
+      title: 'Request access',
+      email: 'Email',
+      emailPlaceholder: 'name@company.com',
+      name: 'Name',
+      company: 'Company',
+      note: 'What will you make with Dazbee?',
+      optional: 'Optional',
+      send: 'Send request',
+      sending: 'Sending…',
+      sent: 'Thanks, we’ll email you when you’re in.',
+      badEmail: 'Enter an email address, such as ada@example.com.',
+      missing: 'Enter your name and company.',
+      tooMany: 'Too many requests from here. Try again in an hour.',
+      checkFailed: 'We couldn’t check you’re a person. Try again.',
+      failed: 'That didn’t send. Try again.',
+      close: 'Close',
+    },
     /** The sample ad drawn three times beside the sign-in form, as decoration. */
     sample: { brand: 'Harbour Coffee', headline: 'Cold brew is back', price: '₹149', cta: 'Order now' },
   },
