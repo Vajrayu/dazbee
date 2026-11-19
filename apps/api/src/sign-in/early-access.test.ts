@@ -3,7 +3,7 @@
 import { randomUUID } from 'node:crypto'
 
 import { eq } from 'drizzle-orm'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 
 import { invites, memberships, users, workspaces } from '@dazbee/db'
 import { Invite, SignedIn, SignInRefused } from '@dazbee/schema'
@@ -74,14 +74,19 @@ async function recordsOf(person: SignedInPerson) {
 }
 
 /**
- * Expects the person refused for `reason`, with nothing recorded of them, no WorkOS organization made, and
- * their WorkOS session ended.
+ * Expects the person refused for `reason`, with nothing recorded of them, no WorkOS organization made, their
+ * WorkOS session ended, and the refusal logged with its reason and not their email.
  */
 async function expectRefused(code: string, person: SignedInPerson, reason: SignInRefused['reason']) {
   const organizations = workos.made.organizations.length
+  const logged: string[] = []
+  const log = vi.spyOn(console, 'log').mockImplementation((line: string) => void logged.push(line))
+  onTestFinished(() => log.mockRestore())
   const answer = await signIn(code)
   expect(answer.status).toBe(403)
   expect(SignInRefused.parse(answer.json).reason).toBe(reason)
+  expect(logged).toContain(JSON.stringify({ event: 'sign-in-refused', reason }))
+  expect(logged.join(' ')).not.toContain(person.user.email)
   expect(await recordsOf(person)).toEqual({ users: [], memberships: [], workspaces: [] })
   expect(workos.made.organizations).toHaveLength(organizations)
   expect(workos.made.endedSessions).toContain(person.sessionId)
@@ -206,7 +211,7 @@ describe('early access at sign-in', () => {
     const { person, code } = newPerson()
     await invite(person.user.email)
     vi.spyOn(workos.invites, 'read').mockRejectedValueOnce(new Error('WorkOS is down'))
-    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'log').mockImplementation(() => {})
     const answer = await signIn(code)
     expect(answer.status).toBe(503)
     expect(await recordsOf(person)).toEqual({ users: [], memberships: [], workspaces: [] })

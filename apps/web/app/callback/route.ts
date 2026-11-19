@@ -3,13 +3,29 @@
 // open the workspace sign-in chose. A sign-in early access refuses goes back to sign in with its reason.
 // A sign-in that started from an invite and fails goes back to sign in with the invite's token, so trying
 // again still accepts it. On the pilot host, sign-in opens the early-access admin page, that host's `/`.
+// A sign-in this browser didn't start, such as the sign-up an invite email's link opens at WorkOS, which
+// WorkOS then sends here with no state, is started again once from here, without its code: WorkOS answers
+// at once for the person it just signed in. Each refused or restarted sign-in is logged with its reason.
 import { cookies } from 'next/headers'
-import type { NextRequest } from 'next/server'
+import type { NextRequest, NextResponse } from 'next/server'
 
 import { workspacePath } from '@/lib/brand-routes.ts'
 import { isPilotHost } from '@/lib/pilot-host.ts'
-import { completeSignIn } from '@/lib/server/api.ts'
-import { cookieOptions, INVITATION_COOKIE, seeOther, SESSION_COOKIE, STATE_COOKIE } from '@/lib/server/sign-in.ts'
+import { ApiFailure, completeSignIn } from '@/lib/server/api.ts'
+import {
+  AGAIN_STATE,
+  cookieOptions,
+  INVITATION_COOKIE,
+  logSignIn,
+  seeOther,
+  SESSION_COOKIE,
+  type SignInSite,
+  startSignIn,
+  STATE_COOKIE,
+} from '@/lib/server/sign-in.ts'
+
+/** An error code as WorkOS names one; anything else in a callback's `error` is not logged. */
+const WORKOS_ERROR = /^[a-z_]{1,64}$/
 
 export async function GET(request: NextRequest) {
   const jar = await cookies()
@@ -23,17 +39,74 @@ export async function GET(request: NextRequest) {
     const again = new URLSearchParams({ error, ...(invitationToken ? { invitation_token: invitationToken } : {}) })
     return seeOther(`/login?${again}`)
   }
-  if (!code || !state || !expected || state !== expected) return failed()
+  if (!code) {
+    const workosError = request.nextUrl.searchParams.get('error')
+    logSignIn('refused', {
+      reason: 'no-code',
+      workosError: workosError && WORKOS_ERROR.test(workosError) ? workosError : null,
+    })
+    return failed()
+  }
+  if (!state || state !== expected) return startAgain(request, state, expected, invitationToken, failed)
   let session
   try {
     session = await completeSignIn(code)
-  } catch {
+  } catch (e) {
+    const answered = e instanceof ApiFailure
+    logSignIn(answered && e.status < 500 ? 'refused' : 'unfinished', {
+      reason: 'api-failed',
+      ...(answered ? { status: e.status, error: e.message } : { error: String(e) }),
+    })
     return failed()
   }
-  if ('refused' in session) return failed(session.refused)
+  if ('refused' in session) {
+    logSignIn('refused', { reason: session.refused })
+    return failed(session.refused)
+  }
   jar.set(SESSION_COOKIE, session.token, {
     ...cookieOptions(request.nextUrl.origin),
     expires: new Date(session.expiresAt),
   })
   return seeOther(isPilotHost(request.headers.get('host')) ? '/' : workspacePath(session.open))
+}
+
+/**
+ * Starts again a sign-in this browser didn't start, leaving its code unused, so no code from elsewhere signs
+ * anyone in here. One started again that comes back without its state, or with another, is refused, so it
+ * never loops: its state, or the state cookie it left, begins like one started again.
+ */
+async function startAgain(
+  request: NextRequest,
+  state: string | null,
+  expected: string | undefined,
+  invitationToken: string | undefined,
+  failed: () => NextResponse,
+): Promise<NextResponse> {
+  const why = !state ? 'no-state' : !expected ? 'not-started-here' : 'other-state'
+  if (state?.startsWith(AGAIN_STATE) || expected?.startsWith(AGAIN_STATE)) {
+    logSignIn('refused', { reason: `${why}-after-starting-again` })
+    return failed()
+  }
+  let url
+  try {
+    url = await startSignIn(invitationToken, site(request), true)
+  } catch (e) {
+    logSignIn('unfinished', { reason: 'start-again-failed', error: String(e) })
+    return failed()
+  }
+  if (!url) {
+    logSignIn('unfinished', { reason: 'sign-in-not-set-up' })
+    return failed()
+  }
+  logSignIn('started-again', { reason: why })
+  return seeOther(url)
+}
+
+/**
+ * The site the request came to: the Host header's, as the browser addressed it, over the protocol Next read
+ * from the proxy; behind a proxy, the request's own URL names the server, not the site.
+ */
+function site(request: NextRequest): SignInSite {
+  const host = request.headers.get('host')
+  return { origin: host ? `${request.nextUrl.protocol}//${host}` : request.nextUrl.origin, host }
 }

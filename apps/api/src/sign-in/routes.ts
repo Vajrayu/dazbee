@@ -13,6 +13,7 @@ import {
 } from '@dazbee/schema'
 
 import { body, type Env, error } from '../http.ts'
+import { logEvent } from '../log.ts'
 import type { InvitesProviders } from '../members/invites-provider.ts'
 import { EarlyAccessRefused, endRefusedSession } from './early-access.ts'
 import { bearerToken, readSessionToken } from './session.ts'
@@ -49,18 +50,32 @@ export function signInRoutes({
   app.post('/auth/callback', async (c) => {
     if (!signIn) return c.json(error('Sign-in is not set up'), 404)
     const input = await body(c.req.raw, CompleteSignIn)
-    if (input instanceof Response) return input
+    if (input instanceof Response) {
+      logEvent('sign-in-refused', { reason: 'body-not-valid' })
+      return input
+    }
     let person: SignedInPerson
     try {
       person = await signIn.provider.authenticate(input.code)
-    } catch {
+    } catch (e) {
+      // Only the error's kind and WorkOS's code for it: WorkOS's description of a refused code may quote it.
+      const workosError = (e as { error?: unknown } | null)?.error
+      logEvent('sign-in-refused', {
+        reason: 'code-not-accepted',
+        error: e instanceof Error ? e.name : typeof e,
+        workosError: typeof workosError === 'string' ? workosError : undefined,
+      })
       return c.json(error('That sign-in did not work; try again'), 400)
     }
     try {
       return c.json((await completeSignIn(db, signIn, invites, person)) satisfies SignedIn)
     } catch (e) {
-      if (e instanceof SignInUnfinished) return c.json(error(e.message), 503)
+      if (e instanceof SignInUnfinished) {
+        logEvent('sign-in-unfinished', { reason: 'invite-unread' })
+        return c.json(error(e.message), 503)
+      }
       if (e instanceof EarlyAccessRefused) {
+        logEvent('sign-in-refused', { reason: e.reason })
         await endRefusedSession(signIn.provider, person)
         return c.json({ ...error(e.message), reason: e.reason } satisfies SignInRefused, 403)
       }

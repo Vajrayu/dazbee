@@ -9,6 +9,7 @@ import { eq, inArray } from 'drizzle-orm'
 import { type Db, newId, type PendingDeletionKind, pendingDeletions, type Tx, users } from '@dazbee/db'
 import type { Storage } from '@dazbee/storage'
 
+import { logError } from '../log.ts'
 import type { InvitesProvider } from '../members/invites-provider.ts'
 import type { SignInProvider } from '../sign-in/sign-in.ts'
 
@@ -49,7 +50,7 @@ export async function recordDeletions(tx: Tx, deletions: PendingDeletion[]): Pro
 export function finishSoon(db: Db, deleters: Deleters, ids?: string[]): void {
   if (ids?.length === 0) return
   const finish = () => {
-    finishDeletions(db, deleters, ids).catch((e: unknown) => console.error('pending deletions failed', e))
+    finishDeletions(db, deleters, ids).catch((e: unknown) => logError('pending-deletions-failed', e))
   }
   finish()
   setTimeout(finish, FOLDER_SETTLE_MS).unref()
@@ -76,7 +77,7 @@ export async function finishDeletions(db: Db, deleters: Deleters, ids?: string[]
       await db.delete(pendingDeletions).where(eq(pendingDeletions.id, row.id))
     } catch (e) {
       left += 1
-      console.error(`pending deletion ${row.id} (${row.kind}) failed; it is tried again on the next start`, e)
+      logError('pending-deletion-failed', e, { id: row.id, kind: row.kind })
     }
   }
   return left

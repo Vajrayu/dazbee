@@ -12,6 +12,7 @@ import type { ApiError, SignInRefusal, SignInRefused } from '@dazbee/schema'
 import type { Admins } from '../admin/admins.ts'
 import { isRemoved, isRemovedUser } from '../admin/dazbee-invites.ts'
 import { error } from '../http.ts'
+import { logError } from '../log.ts'
 import type { SignedInPerson, SignInProvider } from './sign-in.ts'
 
 /** The emails allowed to sign up, in lower case; null lets anyone sign up. */
@@ -90,7 +91,7 @@ export async function endRefusedSession(provider: SignInProvider, person: Signed
   try {
     await provider.endSession(person.sessionId)
   } catch (e) {
-    console.error(e)
+    logError('workos-session-not-ended', e)
   }
 }
 

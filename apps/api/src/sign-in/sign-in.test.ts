@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto'
 
 import { and, eq } from 'drizzle-orm'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 
 import { invites, memberships, users, workspaces } from '@dazbee/db'
 import { ApiError, Invite, SignedIn, SignedOut, SignInLink, WorkspaceSummary } from '@dazbee/schema'
@@ -141,11 +141,19 @@ describe('signing in (#58)', () => {
     })
   })
 
-  it('refuses a code WorkOS does not know, and a body without one', async () => {
+  it('refuses a code WorkOS does not know, and a body without one, logging each with its reason and not the code', async () => {
+    const logged: string[] = []
+    const log = vi.spyOn(console, 'log').mockImplementation((line: string) => void logged.push(line))
+    onTestFinished(() => log.mockRestore())
     const bad = await call('POST', '/auth/callback', { body: { code: 'not-a-code' } })
     expect(bad.status).toBe(400)
     expect(ApiError.parse(bad.json).error).toMatch(/did not work/)
     expect((await call('POST', '/auth/callback', { body: {} })).status).toBe(400)
+    expect(logged.map((line) => JSON.parse(line) as unknown)).toEqual([
+      { event: 'sign-in-refused', reason: 'code-not-accepted', error: 'Error' },
+      { event: 'sign-in-refused', reason: 'body-not-valid' },
+    ])
+    expect(logged.join(' ')).not.toContain('not-a-code')
   })
 
   it('ends a session’s WorkOS session on sign-out, when it has one', async () => {
@@ -277,7 +285,7 @@ describe('accepting an invite at sign-in', () => {
       link: 'https://auth.example.test/invite',
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     })
-    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'log').mockImplementation(() => {})
     return id
   }
   const pendingIds = async () =>
@@ -293,6 +301,9 @@ describe('accepting an invite at sign-in', () => {
       status: 503,
       json: { error: "Sign-in couldn't finish; try again" },
     })
+    expect(vi.mocked(console.log)).toHaveBeenCalledWith(
+      JSON.stringify({ event: 'sign-in-unfinished', reason: 'invite-unread' }),
+    )
     expect(workos.made.organizations).toHaveLength(organizations)
     expect(await membershipsOf(person)).toEqual([])
     expect(await pendingIds()).toContain(id)

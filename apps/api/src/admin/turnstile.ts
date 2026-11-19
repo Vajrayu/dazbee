@@ -1,5 +1,6 @@
 // Cloudflare Turnstile's check on a request to join: the token the form's widget gave, checked with
 // Cloudflare's siteverify using the secret TURNSTILE_SECRET_KEY. With no secret there is no check.
+import { logError } from '../log.ts'
 
 /** Whether a Turnstile token is good; tests give a stand-in that never calls out. */
 export type TurnstileCheck = (token: string, address: string | null) => Promise<boolean>
@@ -30,7 +31,7 @@ export function siteverify(secret: string, url = SITEVERIFY_URL): TurnstileCheck
       const answer = (await response.json()) as { success?: unknown }
       return answer.success === true
     } catch (e) {
-      console.error(e)
+      logError('turnstile-unreachable', e)
       return false
     }
   }

@@ -10,6 +10,7 @@ import type { SignedIn } from '@dazbee/schema'
 
 import type { Admins } from '../admin/admins.ts'
 import { acceptDazbeeInvite, pendingDazbeeInvites, type WaitingDazbeeInvite } from '../admin/dazbee-invites.ts'
+import { logError } from '../log.ts'
 import { acceptInvite, type WaitingInvite, waitingInvites } from '../members/invites.ts'
 import {
   dazbeeInvitesProvider,
@@ -284,7 +285,7 @@ async function readInvite(provider: InvitesProvider | null, id: string): Promise
   try {
     return await provider.read(id)
   } catch (e) {
-    console.error(e)
+    logError('invite-unread', e)
     return null
   }
 }
