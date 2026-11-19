@@ -19,7 +19,8 @@ export interface Database {
   close(): Promise<void>
 }
 
-const MIGRATIONS = fileURLToPath(new URL('../migrations', import.meta.url))
+/** The migrations every database is brought up to, oldest first. */
+export const MIGRATIONS = fileURLToPath(new URL('../migrations', import.meta.url))
 
 export function openDatabase(url: string, { max = 4 } = {}): Database {
   const pool = new pg.Pool({ connectionString: url, max })

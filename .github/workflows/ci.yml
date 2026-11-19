@@ -30,6 +30,10 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libharfbuzz-bin
       - run: pnpm lint
       - run: pnpm typecheck
+      # Fails when tables.ts holds a change that packages/db/migrations has no migration for, or one
+      # drizzle-kit would ask about (a rename); drizzle-kit itself is stopped after 60 s.
+      - run: pnpm --filter @dazbee/db migration:check
+        timeout-minutes: 2
       # Postgres, the API and the sync server, from this checkout: the API's seam tests (#33) and the
       # sync server's run against them, and the API runs the migrations on start.
       - run: docker compose up -d --wait
