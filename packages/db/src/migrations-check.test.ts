@@ -64,9 +64,9 @@ describe('checkMigrations', () => {
 
   it('fails a folder with a SQL file or snapshot its journal does not list', async () => {
     const withSql = await copiedMigrations()
-    await writeFile(join(withSql, '0001_unlisted.sql'), 'select 1;')
+    await writeFile(join(withSql, '9999_unlisted.sql'), 'select 1;')
     const withSnapshot = await copiedMigrations()
-    await cp(join(withSnapshot, 'meta', '0000_snapshot.json'), join(withSnapshot, 'meta', '0001_snapshot.json'))
+    await cp(join(withSnapshot, 'meta', '0000_snapshot.json'), join(withSnapshot, 'meta', '9999_snapshot.json'))
     const reason = 'the journal, the SQL files and the snapshots list different migrations'
     expect(await checkMigrations(withSql)).toMatchObject({ ok: false, reason })
     expect(await checkMigrations(withSnapshot)).toMatchObject({ ok: false, reason })

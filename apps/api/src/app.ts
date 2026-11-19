@@ -13,6 +13,7 @@ import type { Storage } from '@dazbee/storage'
 
 import type { Admins } from './admin/admins.ts'
 import { accessRequestRoutes, adminRoutes } from './admin/routes.ts'
+import type { TurnstileCheck } from './admin/turnstile.ts'
 import { type RequestLimit, requestLimit } from './admin/waiting-list.ts'
 import { InvalidUpload } from './assets/assets.ts'
 import { assetRoutes } from './assets/routes.ts'
@@ -47,6 +48,7 @@ export function createApp({
   invites = { workos: null, dev: null },
   admins = new Set(),
   requests = requestLimit(),
+  turnstile = null,
 }: {
   db: Db
   storage: Storage
@@ -61,6 +63,8 @@ export function createApp({
   admins?: Admins
   /** The limit on requests to join from one address. */
   requests?: RequestLimit
+  /** The Turnstile check on requests to join; none skips it. */
+  turnstile?: TurnstileCheck | null
 }) {
   const app = new Hono<Env>()
 
@@ -71,7 +75,7 @@ export function createApp({
   // The stand-in accepts Dazbee invites only when it sends them, which it does without WorkOS.
   app.route('/', devInviteRoutes({ db, dev: invites.dev && { ...invites.dev, dazbee: !invites.workos } }))
   app.route('/', adminRoutes({ db, sessionOf, admins, invites: providers }))
-  app.route('/', accessRequestRoutes({ db, limit: requests }))
+  app.route('/', accessRequestRoutes({ db, limit: requests, turnstile }))
 
   const signedIn = requireSession(sessionOf, removedRefusal(db, admins))
   const records = new Hono<Env>()

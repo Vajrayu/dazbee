@@ -24,6 +24,7 @@ import {
   removeInvitedPerson,
   resendDazbeeInvite,
 } from './dazbee-invites.ts'
+import type { TurnstileCheck } from './turnstile.ts'
 import { dismissRequest, inviteRequest, listAccessRequests, requestAccess, type RequestLimit } from './waiting-list.ts'
 
 export function adminRoutes({
@@ -86,18 +87,29 @@ export function adminRoutes({
 }
 
 /**
- * `POST /access-requests`: a request to join, needing no session, answered 204 whoever sends it; the 6th
- * from one address within the hour is answered 429. The address is the person's, which the web app's server
- * passes on as the first entry of `X-Forwarded-For`; the API is reached only through it.
+ * `POST /access-requests`: a request to join, needing no session, answered 204 whoever sends it. The 6th from
+ * one address within the hour is answered 429, and with a Turnstile check, one whose token Cloudflare doesn't
+ * vouch for is answered 400; neither stores anything. The address is the person's as Cloudflare saw it,
+ * `CF-Connecting-IP`, which the web app's server passes on; the API is reached only through it.
  */
-export function accessRequestRoutes({ db, limit }: { db: Db; limit: RequestLimit }): Hono<Env> {
+export function accessRequestRoutes({
+  db,
+  limit,
+  turnstile,
+}: {
+  db: Db
+  limit: RequestLimit
+  turnstile: TurnstileCheck | null
+}): Hono<Env> {
   const app = new Hono<Env>()
 
   app.post('/access-requests', async (c) => {
-    const address = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
-    if (!limit.take(address)) return c.json(error('Too many requests; try again later'), 429)
+    const address = c.req.header('cf-connecting-ip')?.trim() || null
+    if (!limit.take(address ?? 'unknown')) return c.json(error('Too many requests; try again later'), 429)
     const input = await body(c.req.raw, RequestAccess)
     if (input instanceof Response) return input
+    if (turnstile && !(input.turnstileToken && (await turnstile(input.turnstileToken, address))))
+      return c.json(error('The check that you are a person failed; try again'), 400)
     await requestAccess(db, input)
     return c.body(null, 204)
   })

@@ -40,12 +40,16 @@ export type DazbeeInvites = z.infer<typeof DazbeeInvites>
 export const CreateDazbeeInvite = z.object({ email: Email })
 export type CreateDazbeeInvite = z.infer<typeof CreateDazbeeInvite>
 
-/** A request to join, sent from /login: email, name, company, and what they will make, which may be empty. */
+/**
+ * A request to join, sent from /login: email, name, company, what they will make, which may be empty, and
+ * the token of the form's Turnstile check, when the form has one.
+ */
 export const RequestAccess = z.object({
   email: Email,
   name: z.string().trim().min(1).max(120),
   company: z.string().trim().min(1).max(120),
   note: z.string().trim().max(1000).default(''),
+  turnstileToken: z.string().min(1).max(4096).optional(),
 })
 export type RequestAccess = z.infer<typeof RequestAccess>
 

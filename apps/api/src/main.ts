@@ -6,6 +6,7 @@ import { openStorage, storageSettings } from '@dazbee/storage'
 import { syncTokenSecret } from '@dazbee/sync-token'
 
 import { adminEmails } from './admin/admins.ts'
+import { turnstileCheck } from './admin/turnstile.ts'
 import { createApp } from './app.ts'
 import { workosInvites } from './members/invites-provider.ts'
 import { devInvites } from './sign-in/dev-invites.ts'
@@ -49,7 +50,9 @@ const invites = {
 }
 // The image sets BUILD_ID to the commit it was built from; a server run from a checkout is `dev`.
 const build = process.env.BUILD_ID || 'dev'
-const app = createApp({ db, storage, sessionOf, syncSecret, build, signIn, invites, admins })
+// Requests to join pass Cloudflare Turnstile's check when TURNSTILE_SECRET_KEY is set.
+const turnstile = turnstileCheck()
+const app = createApp({ db, storage, sessionOf, syncSecret, build, signIn, invites, admins, turnstile })
 const ways =
   [
     signIn && `WorkOS sign-in${signIn.allowed || admins.size > 0 ? ' in early access' : ''}`,
