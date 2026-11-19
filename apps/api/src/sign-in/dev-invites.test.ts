@@ -22,6 +22,7 @@ const app = createApp({
   storage,
   sessionOf: tokenSession(sessionSecret),
   syncSecret,
+  build: 'test-build',
   invites: { workos: null, dev: { provider: dev, secret: sessionSecret } },
 })
 

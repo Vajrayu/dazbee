@@ -49,7 +49,7 @@ describe('GET /dev/accept', () => {
     const response = await GET(new NextRequest('http://localhost:3000/dev/accept?invite=invite-1'))
 
     expect(asked).toEqual([{ path: '/auth/dev/accept', body: { invite: 'invite-1' } }])
-    expect([response.status, response.headers.get('location')]).toEqual([303, 'http://localhost:3000/w/workspace-2'])
+    expect([response.status, response.headers.get('location')]).toEqual([303, '/w/workspace-2'])
     expect(jar.get(SESSION_COOKIE)).toBe('a-session-token')
   })
 
@@ -81,10 +81,7 @@ describe('GET /dev/accept', () => {
 
     const response = await GET(new NextRequest('http://localhost:3000/dev/accept?invite=invite-1'))
 
-    expect([response.status, response.headers.get('location')]).toEqual([
-      303,
-      'http://localhost:3000/login?invite=unusable',
-    ])
+    expect([response.status, response.headers.get('location')]).toEqual([303, '/login?invite=unusable'])
     expect(jar.get(SESSION_COOKIE)).toBe('the-session-before')
   })
 

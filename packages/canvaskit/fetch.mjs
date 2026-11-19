@@ -1,8 +1,8 @@
 // Puts our CanvasKit build into bin/: the files of the GitHub release that release.json names, each
 // checked against its SHA-256. Fails when build/ changed since that release, so a stale build is
-// never used. Runs on every pnpm install; files already in place and matching are kept. The
-// repository is private, so with a token in GITHUB_TOKEN or GH_TOKEN (CI passes its own) the files
-// come through the API as the release's assets; without one, from the public download address.
+// never used. Runs on every pnpm install; files already in place and matching are kept. The files
+// come from the release's public download address, or through the API as the release's assets
+// when GITHUB_TOKEN or GH_TOKEN holds a token.
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'

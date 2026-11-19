@@ -1,0 +1,131 @@
+# Production: Caddy in front of the web app, the API, the sync server and Postgres 16, on one server.
+# Run it from the folder that holds this deploy/ folder, the .env, live/ and certs/ (/opt/dazbee on
+# the server):
+#
+#   docker compose -f deploy/compose.yml --project-directory . up -d
+#
+# A plain `up` starts the blue colour of the web app and API. The green colour is under the `green`
+# profile; the deploy script starts the colour that isn't live with the new image during a swap.
+# Each colour's image tag comes from WEB_BLUE_TAG, WEB_GREEN_TAG, API_BLUE_TAG and API_GREEN_TAG, and
+# the sync server's from SYNC_TAG, each `latest` when unset. Settings come from the .env, whose names
+# deploy/env.example lists; each service gets only the ones it reads.
+#
+# Memory caps sit above what each container used idle and with a design open. With both colours of
+# the web app and API running, as during a swap, they add up to no more than 3.5 GB: Caddy 128 MB,
+# web 2 x 384 MB, API 2 x 512 MB, sync 1024 MB and Postgres 384 MB make 3328 MB.
+name: dazbee
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: '3'
+
+x-web: &web
+  restart: unless-stopped
+  logging: *logging
+  mem_limit: 384m
+  environment:
+    NODE_ENV: production
+    API_URL: http://caddy:8080
+    SYNC_URL: wss://sync.dazbee.com
+    SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
+
+x-api: &api
+  restart: unless-stopped
+  logging: *logging
+  mem_limit: 512m
+  environment:
+    NODE_ENV: production
+    DATABASE_URL: postgres://dazbee:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/dazbee
+    SYNC_TOKEN_SECRET: ${SYNC_TOKEN_SECRET:?set SYNC_TOKEN_SECRET in .env}
+    SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
+    WORKOS_API_KEY: ${WORKOS_API_KEY:-}
+    WORKOS_CLIENT_ID: ${WORKOS_CLIENT_ID:-}
+    WORKOS_REDIRECT_URI: ${WORKOS_REDIRECT_URI:-}
+    STORAGE_ENDPOINT: ${STORAGE_ENDPOINT:?set STORAGE_ENDPOINT in .env}
+    STORAGE_BUCKET: ${STORAGE_BUCKET:?set STORAGE_BUCKET in .env}
+    STORAGE_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID:?set STORAGE_ACCESS_KEY_ID in .env}
+    STORAGE_SECRET_ACCESS_KEY: ${STORAGE_SECRET_ACCESS_KEY:?set STORAGE_SECRET_ACCESS_KEY in .env}
+    STORAGE_REGION: auto
+    ALLOWED_EMAILS: ${ALLOWED_EMAILS:-}
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+services:
+  caddy:
+    image: caddy:2.11.9-alpine
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: 128m
+    command: ['caddy', 'run', '--config', '/etc/caddy/deploy/Caddyfile', '--adapter', 'caddyfile']
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      # Folders, not files, so a new copy of deploy/ or of live/upstreams.caddy is what a reload reads.
+      - ./deploy:/etc/caddy/deploy:ro
+      - ./live:/etc/caddy/live:ro
+      - ./certs:/etc/caddy/certs:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+  web-blue:
+    <<: *web
+    image: ghcr.io/dazbee-ai/dazbee-web:${WEB_BLUE_TAG:-latest}
+
+  web-green:
+    <<: *web
+    image: ghcr.io/dazbee-ai/dazbee-web:${WEB_GREEN_TAG:-latest}
+    profiles: [green]
+
+  api-blue:
+    <<: *api
+    image: ghcr.io/dazbee-ai/dazbee-api:${API_BLUE_TAG:-latest}
+
+  api-green:
+    <<: *api
+    image: ghcr.io/dazbee-ai/dazbee-api:${API_GREEN_TAG:-latest}
+    profiles: [green]
+
+  sync:
+    image: ghcr.io/dazbee-ai/dazbee-sync:${SYNC_TAG:-latest}
+    restart: unless-stopped
+    logging: *logging
+    # The cap is the V8 heap limit plus 256 MB for everything outside the heap.
+    command: ['node', '--max-old-space-size=768', 'apps/sync/src/main.ts']
+    mem_limit: 1024m
+    # A stop folds every open design before the process exits.
+    stop_grace_period: 60s
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://dazbee:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/dazbee
+      SYNC_TOKEN_SECRET: ${SYNC_TOKEN_SECRET:?set SYNC_TOKEN_SECRET in .env}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: 384m
+    environment:
+      POSTGRES_USER: dazbee
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: dazbee
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U dazbee -d dazbee']
+      interval: 30s
+      start_period: 60s
+      start_interval: 1s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  postgres:
+  caddy-data:
+  caddy-config:

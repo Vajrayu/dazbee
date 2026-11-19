@@ -2,7 +2,7 @@
 
 ## Develop
 
-Needs Node 22.18 or later (CI and docker compose run Node 26) and pnpm 12 (`npm install -g pnpm@12`). The repository is private, so the first `pnpm install` fetches our CanvasKit build with a GitHub token: `GH_TOKEN=$(gh auth token) pnpm install`.
+Needs Node 22.18 or later (CI, docker compose and the production images run Node 26) and pnpm 12 (`npm install -g pnpm@12`).
 
 ```sh
 pnpm install
@@ -30,13 +30,10 @@ packages/db/          Drizzle tables and migrations (ADR-0009)
 packages/storage/     object storage over the S3 API (ADR-0010)
 packages/sync-token/  tokens the API signs for the sync server
 packages/config/      shared tsconfig, ESLint and Vitest presets; the dependency-direction and no-Yjs checks
+deploy/               production: the compose file, Caddyfile and settings the server runs the images with; each app's Dockerfile builds its image
 tests/pixels/         Vitest checks: exports against reference renders, the gesture matrix's rows run in Node on the test editor, and speed checks that pnpm test runs alone after the rest (test:speed)
 ```
 
 Packages only depend downward: schema → doc → renderer → editor, and never on an app. `pnpm lint:deps` enforces it (ADR-0001).
 
 Inside each workspace, code is laid out by `docs/agents/code-layout.md`: feature folders, one order inside every file, and the imports each folder may make.
-
-## Vercel previews
-
-One-time setup by the repo owner: in Vercel, **Add New → Project**, import `dazbee-ai/dazbee`, set **Root Directory** to `apps/web` (framework Next.js; Vercel detects pnpm and the workspace). Every pull request then gets a preview URL.

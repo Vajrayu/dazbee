@@ -41,7 +41,7 @@ describe('GET /callback', () => {
 
     const response = await GET(new NextRequest('http://localhost:3000/callback?code=good&state=the-one-we-started'))
 
-    expect([response.status, response.headers.get('location')]).toEqual([303, 'http://localhost:3000/w/workspace-1'])
+    expect([response.status, response.headers.get('location')]).toEqual([303, '/w/workspace-1'])
     expect(jar.get(SESSION_COOKIE)).toBe('a-session-token')
     expect(jar.has(STATE_COOKIE)).toBe(false)
     expect(completeSignIn).toHaveBeenCalledWith('good')
@@ -69,7 +69,7 @@ describe('GET /callback', () => {
 
       expect([response.status, response.headers.get('location')]).toEqual([
         303,
-        'http://localhost:3000/login?error=1&invitation_token=invite_Token-1',
+        '/login?error=1&invitation_token=invite_Token-1',
       ])
       expect(jar.has(INVITATION_COOKIE)).toBe(false)
       expect(jar.has(SESSION_COOKIE)).toBe(false)
@@ -83,10 +83,7 @@ describe('GET /callback', () => {
 
       const response = await GET(new NextRequest('http://localhost:3000/callback?code=good&state=the-one-we-started'))
 
-      expect([response.status, response.headers.get('location')]).toEqual([
-        303,
-        `http://localhost:3000/login?error=${reason}`,
-      ])
+      expect([response.status, response.headers.get('location')]).toEqual([303, `/login?error=${reason}`])
       expect(jar.has(SESSION_COOKIE)).toBe(false)
     }
   })
@@ -96,7 +93,7 @@ describe('GET /callback', () => {
 
     const response = await GET(new NextRequest('http://localhost:3000/callback?code=made-up&state=not-the-one'))
 
-    expect([response.status, response.headers.get('location')]).toEqual([303, 'http://localhost:3000/login?error=1'])
+    expect([response.status, response.headers.get('location')]).toEqual([303, '/login?error=1'])
     expect([...jar.keys()]).toEqual([])
     expect(response.cookies.get(SESSION_COOKIE)).toBeUndefined()
     expect(completeSignIn).not.toHaveBeenCalled()
@@ -105,7 +102,7 @@ describe('GET /callback', () => {
   it('refuses a callback when this browser started no sign-in', async () => {
     const response = await GET(new NextRequest('http://localhost:3000/callback?code=made-up&state=any'))
 
-    expect([response.status, response.headers.get('location')]).toEqual([303, 'http://localhost:3000/login?error=1'])
+    expect([response.status, response.headers.get('location')]).toEqual([303, '/login?error=1'])
     expect(jar.has(SESSION_COOKIE)).toBe(false)
     expect(response.cookies.get(SESSION_COOKIE)).toBeUndefined()
     expect(completeSignIn).not.toHaveBeenCalled()

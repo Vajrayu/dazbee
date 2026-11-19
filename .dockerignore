@@ -1,0 +1,21 @@
+# What the images' builds never read: installed and built files, which each build makes itself, and
+# settings and secrets, which a running container gets from its environment.
+**/node_modules
+**/.next
+**/.turbo
+**/dist
+**/coverage
+**/*.tsbuildinfo
+.git
+.github
+.claude
+.vscode
+.try-it
+reference
+deploy
+docs
+**/.env*
+packages/canvaskit/bin
+packages/canvaskit/.skia
+apps/web/public/vendor
+tests/pixels/output

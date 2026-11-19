@@ -33,6 +33,7 @@ const earlyApp = createApp({
   storage,
   sessionOf: tokenSession(sessionSecret),
   syncSecret,
+  build: 'test-build',
   signIn: { provider: workos.provider, secret: sessionSecret, allowed },
   invites: { workos: workos.invites, dev: null },
 })

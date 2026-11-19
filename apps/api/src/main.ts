@@ -43,7 +43,9 @@ const invites = {
       ? { provider: devInvites(db, process.env.WEB_URL ?? 'http://localhost:3000'), secret: tokenSecret }
       : null,
 }
-const app = createApp({ db, storage, sessionOf, syncSecret, signIn, invites })
+// The image sets BUILD_ID to the commit it was built from; a server run from a checkout is `dev`.
+const build = process.env.BUILD_ID || 'dev'
+const app = createApp({ db, storage, sessionOf, syncSecret, build, signIn, invites })
 const ways =
   [signIn && `WorkOS sign-in${signIn.allowed ? ' in early access' : ''}`, dev && 'the development session']
     .filter(Boolean)
