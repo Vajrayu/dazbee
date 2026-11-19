@@ -47,7 +47,8 @@ jobs:
           retention-days: 7
 
   # The production images: built, run with deploy/compose.yml behind Caddy with a test .env and a
-  # self-signed certificate, and checked. On main they are pushed to GitHub's container registry.
+  # self-signed certificate, checked, and deployed over each other with deploy/deploy.sh. On main they
+  # are pushed to GitHub's container registry.
   images:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -93,7 +94,6 @@ jobs:
           stack="$RUNNER_TEMP/stack"
           mkdir -p "$stack/live" "$stack/certs"
           cp -r deploy "$stack/deploy"
-          cp deploy/upstreams.caddy "$stack/live/upstreams.caddy"
           openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=app.dazbee.com             -addext subjectAltName=DNS:app.dazbee.com,DNS:sync.dazbee.com             -keyout "$stack/certs/origin.key" -out "$stack/certs/origin.pem"
           chmod 644 "$stack/certs/origin.key"
           {
@@ -133,9 +133,22 @@ jobs:
             grep -q "\"build\":\"$GITHUB_SHA\"" <<< "$health"
             echo "$api/health names build $GITHUB_SHA"
           done
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      # The probe's packages: the deploy check runs it in a Node container with this checkout.
+      - run: pnpm install --frozen-lockfile --filter @dazbee/deploy-check...
+      # deploy.sh swaps the stack's apps while the probe asks the web app and the API every 100 ms
+      # and holds a tab open on the sync server; an image whose health check fails is left unserved.
+      - name: Deploy while the probe asks
+        run: tests/deploy/check.sh "$RUNNER_TEMP/stack" "$GITHUB_SHA"
       - if: failure()
         working-directory: ${{ runner.temp }}/stack
-        run: docker compose -f deploy/compose.yml --project-directory . --profile green logs --no-color --tail 200
+        run: |
+          docker compose -f deploy/compose.yml --project-directory . --profile green logs --no-color --tail 200
+          docker logs dazbee-deploy-probe || true
       - if: env.PUSH == 'true'
         uses: docker/login-action@v4
         with:
