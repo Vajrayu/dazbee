@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { filterEffects } from './filters.ts'
 import { readSheets } from './style.ts'
+import { timeOf } from './test-growth.ts'
 import { IDENTITY, type Matrix, parseTransform } from './transform.ts'
 import { parseXml, type XmlElement } from './xml.ts'
 
@@ -243,9 +244,12 @@ describe('filterEffects', () => {
       'a blend with itself': '<feBlend in="a" in2="a" result="a"/>',
     }
     for (const [name, step] of Object.entries(steps)) {
-      const started = performance.now()
-      expect(effectsOf(doubled(60, step)), name).toBeNull()
-      expect(performance.now() - started, name).toBeLessThan(200)
+      let effects: unknown
+      const ms = timeOf(() => {
+        effects = effectsOf(doubled(60, step))
+      })
+      expect(effects, name).toBeNull()
+      expect(ms, name).toBeLessThan(200)
     }
   })
 

@@ -1,5 +1,6 @@
-// How a reader's time grows with the length of its input, measured so that a crowded machine
-// doesn't change the answer: what the tests of hostile files check linear time with.
+// How a reader's time grows with the length of its input, and how long one read takes, measured so
+// that a crowded machine doesn't change the answer: what the tests of hostile files check linear
+// time and a bounded time with.
 
 /** The most `growth` may give for an input ten times as long: well above linear, well below quadratic. */
 export const MAX_GROWTH = 30
@@ -14,14 +15,10 @@ let clock: (() => number) | undefined
  *
  * Each sample times 10 runs of `small` back to back against 1 run of `large`, so the two take about
  * as long and a crowded machine slows both alike, and the fastest of up to 5 samples of each counts.
- * The time is the process's CPU time, which leaves out the time the machine pauses it, where that
- * clock steps by less than a millisecond; on Windows it steps by 15.6 ms, so the wall clock times
- * the runs there. The samples stop once they have taken 1 s in all, so quadratic code fails after
- * about one sample.
+ * The samples stop once they have taken 1 s in all, so quadratic code fails after about one sample.
  */
 export function growth<T>(read: (text: string) => T, small: string, large: string): { result: T; times: number } {
-  clock ??= cpuSteps() < 1 ? cpuTime : () => performance.now()
-  const now = clock
+  const now = pickedClock()
   const timed = (run: () => T) => {
     const started = now()
     const result = run()
@@ -47,6 +44,24 @@ export function growth<T>(read: (text: string) => T, small: string, large: strin
   }
   // The first sample always runs, so `result` is what `read` made of `large`.
   return { result: result as T, times: (10 * fastestLarge) / fastestTen }
+}
+
+/** How long `run` takes, in milliseconds, by the clock `growth` times with. */
+export function timeOf(run: () => void): number {
+  const now = pickedClock()
+  const started = now()
+  run()
+  return now() - started
+}
+
+/**
+ * The clock reads are timed with, in milliseconds: the process's CPU time, which leaves out the
+ * time the machine pauses it, where that clock steps by less than a millisecond; on Windows it steps
+ * by 15.6 ms, so the wall clock times the reads there.
+ */
+function pickedClock() {
+  clock ??= cpuSteps() < 1 ? cpuTime : () => performance.now()
+  return clock
 }
 
 /** The step the CPU clock moves by, in milliseconds: the longest of three steps watched in a busy loop. */
