@@ -33,6 +33,8 @@ import {
   SignedLink,
   SignedOut,
   SignInLink,
+  type SignInRefusal,
+  SignInRefused,
   SyncToken,
   TemplateSummary,
   type UpdateAsset,
@@ -74,9 +76,19 @@ export async function signInLink(state: string, invitationToken?: string) {
   }
 }
 
-/** Swaps the code WorkOS sent back for a session (#58). */
-export const completeSignIn = (code: string) =>
-  call(SignedIn, '/auth/callback', { method: 'POST', body: { code } }, { signIn: false })
+/**
+ * Swaps the code WorkOS sent back for a session (#58), or, when early access refuses the person, the
+ * reason it gave.
+ */
+export async function completeSignIn(code: string): Promise<SignedIn | { refused: SignInRefusal }> {
+  try {
+    return await call(SignedIn, '/auth/callback', { method: 'POST', body: { code } }, { signIn: false })
+  } catch (e) {
+    const refused = e instanceof ApiFailure && e.status === 403 ? SignInRefused.safeParse(e.body) : null
+    if (refused?.success) return { refused: refused.data.reason }
+    throw e
+  }
+}
 
 /** Where to end the person's WorkOS session as they sign out, if anywhere (#58). */
 export const signOutLink = async () =>

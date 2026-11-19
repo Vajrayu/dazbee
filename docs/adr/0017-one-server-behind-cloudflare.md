@@ -1,0 +1,15 @@
+# Dazbee runs on one server behind Cloudflare
+
+Until now nothing was deployed: the web app, API, sync server and database ran only on a developer's machine and in CI, and a change to the tables reset the database. Dazbee now runs in production on one rented server (Ubuntu, Docker), and real people's work is kept.
+
+The server runs the web app, the API, the sync server, Postgres and Caddy as containers from one compose file in the repo, each with a memory cap. The images are built by GitHub Actions and kept in GitHub's container registry; a merge to `main` that passes CI's `check` deploys them over SSH. The web app and API are swapped without downtime; the sync server, which alone owns each open design (ADR-0015), restarts and its tabs reconnect and resend what they hadn't saved. The API applies new migrations when it starts.
+
+Only two addresses face the internet, both through Cloudflare's proxy: `app.dazbee.com` (the web app) and `sync.dazbee.com` (the sync server's WebSockets). The API, Postgres and file storage stay private: the browser only ever talks to the web app and the sync server. Files live in Cloudflare R2, and Postgres is backed up there every night. `dazbee.com` serves the public home, privacy and terms pages from Cloudflare Pages.
+
+From the first deploy, every change to the tables comes with a migration that keeps the data; the one-migration-and-reset rule is gone.
+
+## Considered Options
+
+- Vercel for the web app: rejected. Its free plan is for non-commercial use only, its WebSockets end after minutes and land on separate instances, so the sync server can't run there, and the API would have to face the internet.
+- Netlify, with Netlify Server for the sync server: not now. Netlify Server is in early access and stops after five minutes without requests; Postgres and storage would still live elsewhere.
+- Cloudflare Workers and Containers: Workers' free plan allows 10 ms of CPU per request, too little to render a page or draw a thumbnail, and Containers need the paid plan at more than the server costs.

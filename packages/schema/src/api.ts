@@ -380,6 +380,17 @@ export type CompleteSignIn = z.infer<typeof CompleteSignIn>
 export const SignedIn = z.object({ token: z.string().min(1), expiresAt: z.number().int(), open: RecordId })
 export type SignedIn = z.infer<typeof SignedIn>
 
+/**
+ * Why sign-in refused a person while Dazbee is in early access: `open-invite` when they have a pending
+ * invite they didn't sign in through, `early-access` otherwise.
+ */
+export const SignInRefusal = z.enum(['early-access', 'open-invite'])
+export type SignInRefusal = z.infer<typeof SignInRefusal>
+
+/** The answer to a sign-in refused during early access: no account or workspace is made. */
+export const SignInRefused = ApiError.extend({ reason: SignInRefusal })
+export type SignInRefused = z.infer<typeof SignInRefused>
+
 /** Where to send the person to end their WorkOS session too, when they had one. */
 export const SignedOut = z.object({ logoutUrl: z.url().nullable() })
 export type SignedOut = z.infer<typeof SignedOut>

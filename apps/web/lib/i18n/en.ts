@@ -1433,6 +1433,11 @@ export const en = {
     unavailable: 'Sign-in is not set up on this server yet.',
     /** A development invite's link that can't be used any more. */
     inviteUnusable: 'This invite has expired, was revoked or was already used. Ask for a new one.',
+    /** Sign-in refused during early access, followed by `earlyAccessWrite` when there is an address to write to. */
+    earlyAccess: 'Dazbee is in early access.',
+    earlyAccessWrite: 'Write to {email} to join.',
+    /** Sign-in refused a person with a pending invite who didn't sign in through it. */
+    openInvite: 'Open the invite in your email to join.',
     /** The sample ad drawn three times beside the sign-in form, as decoration. */
     sample: { brand: 'Harbour Coffee', headline: 'Cold brew is back', price: '₹149', cta: 'Order now' },
   },

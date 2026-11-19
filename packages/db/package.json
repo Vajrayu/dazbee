@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "migration": "drizzle-kit generate --name init"
+    "migration": "drizzle-kit generate --name",
+    "migration:check": "node src/scripts/check-migrations.ts"
   },
   "dependencies": {
     "@dazbee/schema": "workspace:*",

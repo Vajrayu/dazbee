@@ -84,7 +84,7 @@ export async function markWorkspaceUsed(db: Db, workspaceId: string, userId: str
 }
 
 /** The workspace the person used last, else the one they joined first; null when they are a member of none. */
-export async function workspaceToOpen(db: Db, userId: string): Promise<string | null> {
+export async function workspaceToOpen(db: Db | Tx, userId: string): Promise<string | null> {
   const [row] = await db
     .select({ workspaceId: memberships.workspaceId })
     .from(memberships)

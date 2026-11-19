@@ -8,6 +8,7 @@ import { syncTokenSecret } from '@dazbee/sync-token'
 import { createApp } from './app.ts'
 import { workosInvites } from './members/invites-provider.ts'
 import { devInvites } from './sign-in/dev-invites.ts'
+import { allowList } from './sign-in/early-access.ts'
 import { seedDevelopment, sessionOfRequest, sessionSecret } from './sign-in/session.ts'
 import { workosProvider, workosSettings } from './sign-in/sign-in.ts'
 
@@ -22,7 +23,8 @@ if (process.env.STORAGE_CREATE_BUCKET === 'on') await storage.ensureBucket()
 const workos = workosSettings()
 const dev = process.env.DAZBEE_DEV_SESSION === 'on'
 if (dev && process.env.NODE_ENV === 'production') throw new Error('DAZBEE_DEV_SESSION is never on in production')
-const signIn = workos ? { provider: workosProvider(workos), secret: sessionSecret() } : null
+// While ALLOWED_EMAILS names any email, sign-up is in early access: only those it allows get in.
+const signIn = workos ? { provider: workosProvider(workos), secret: sessionSecret(), allowed: allowList() } : null
 
 const { db, close } = openDatabase(databaseUrl)
 await migrateDatabase(db)
@@ -45,7 +47,9 @@ const invites = {
 const build = process.env.BUILD_ID || 'dev'
 const app = createApp({ db, storage, sessionOf, syncSecret, build, signIn, invites })
 const ways =
-  [signIn && 'WorkOS sign-in', dev && 'the development session'].filter(Boolean).join(' and ') || 'no way to sign in'
+  [signIn && `WorkOS sign-in${signIn.allowed ? ' in early access' : ''}`, dev && 'the development session']
+    .filter(Boolean)
+    .join(' and ') || 'no way to sign in'
 const server = serve({ fetch: app.fetch, port }, () => console.log(`api on http://localhost:${port} with ${ways}`))
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
