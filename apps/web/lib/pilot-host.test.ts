@@ -1,0 +1,28 @@
+import { describe, expect, it } from 'vitest'
+
+import { isPilotHost, PILOT_PATH, pilotPath } from './pilot-host.ts'
+
+describe('isPilotHost', () => {
+  it('knows the host PILOT_HOST names, in any case, with its port', () => {
+    expect(isPilotHost('pilot.example.com', 'pilot.example.com')).toBe(true)
+    expect(isPilotHost('Pilot.Example.com', ' pilot.example.com ')).toBe(true)
+    expect(isPilotHost('pilot.localhost:3117', 'pilot.localhost:3117')).toBe(true)
+    expect(isPilotHost('pilot.localhost:3000', 'pilot.localhost:3117')).toBe(false)
+    expect(isPilotHost('app.example.com', 'pilot.example.com')).toBe(false)
+  })
+
+  it('knows no pilot host when PILOT_HOST is unset or empty', () => {
+    expect(isPilotHost('pilot.example.com', undefined)).toBe(false)
+    expect(isPilotHost('pilot.example.com', ' ')).toBe(false)
+    expect(isPilotHost(null, '')).toBe(false)
+  })
+})
+
+describe('pilotPath', () => {
+  it("serves the pilot host's / from the admin page, and every other path as it is", () => {
+    expect(pilotPath('/', 'pilot.example.com', 'pilot.example.com')).toBe(PILOT_PATH)
+    expect(pilotPath('/login', 'pilot.example.com', 'pilot.example.com')).toBe('/login')
+    expect(pilotPath('/', 'app.example.com', 'pilot.example.com')).toBe('/')
+    expect(pilotPath('/pilot', 'app.example.com', 'pilot.example.com')).toBe('/pilot')
+  })
+})

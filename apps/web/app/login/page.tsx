@@ -2,7 +2,8 @@
 // the state cookie ties WorkOS's answer to this browser. An invite email's link that starts here
 // brings its `invitation_token`, which the sign-in link carries on, so WorkOS accepts the invite. A
 // sign-in early access refused comes back with its reason, and the notice says what to do; the address to
-// write to is the setting SUPPORT_EMAIL.
+// write to is the setting SUPPORT_EMAIL. Under the early-access notice, Request access puts the person on the
+// waiting list, with Cloudflare Turnstile's check when TURNSTILE_SITE_KEY is set.
 import { buttonStyles } from '@/components/ui/button.tsx'
 import { DazbeeMark } from '@/components/ui/dazbee-mark.tsx'
 import { WarningCircleIcon } from '@/components/ui/icons.tsx'
@@ -12,6 +13,7 @@ import { getMessages } from '@/lib/i18n/server.ts'
 
 import { start } from './actions.ts'
 import { AdFan } from './ad-fan.tsx'
+import { RequestAccess } from './request-access.tsx'
 
 export const dynamic = 'force-dynamic'
 
@@ -75,6 +77,11 @@ export default async function LoginPage({
             {t.signIn.signIn}
           </button>
         </form>
+        {query.error === 'early-access' && (
+          <div className="mt-4">
+            <RequestAccess turnstileSiteKey={process.env.TURNSTILE_SITE_KEY?.trim() ?? ''} />
+          </div>
+        )}
       </section>
     </main>
   )

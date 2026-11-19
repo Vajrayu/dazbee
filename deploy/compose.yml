@@ -34,6 +34,8 @@ x-web: &web
     API_URL: http://caddy:8080
     SYNC_URL: wss://sync.dazbee.com
     SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
+    PILOT_HOST: ${PILOT_HOST:-pilot.dazbee.com}
+    TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
 
 x-api: &api
   restart: unless-stopped
@@ -55,6 +57,8 @@ x-api: &api
     STORAGE_SECRET_ACCESS_KEY: ${STORAGE_SECRET_ACCESS_KEY:?set STORAGE_SECRET_ACCESS_KEY in .env}
     STORAGE_REGION: auto
     ALLOWED_EMAILS: ${ALLOWED_EMAILS:-}
+    ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+    TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
   depends_on:
     postgres:
       condition: service_healthy

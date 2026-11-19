@@ -54,6 +54,17 @@ describe('signing in (#58)', () => {
     expect((await call('GET', `${url}&invitationToken=not%20a%20token`)).status).toBe(400)
   })
 
+  it("sends the person back to a site's own /callback when it names one, and refuses any other address", async () => {
+    const state = randomUUID()
+    const url = `/auth/sign-in-url?state=${state}`
+    const pilot = encodeURIComponent('https://pilot.example.com/callback')
+    expect(SignInLink.parse((await call('GET', `${url}&redirectUri=${pilot}`)).json).url).toBe(
+      `https://auth.example.test/authorize?state=${state}&redirect_uri=${pilot}`,
+    )
+    for (const bad of ['https://pilot.example.com/elsewhere', 'javascript:alert(1)', 'not a url'])
+      expect((await call('GET', `${url}&redirectUri=${encodeURIComponent(bad)}`)).status).toBe(400)
+  })
+
   it('makes a workspace, its WorkOS organization and an Owner membership on a first sign-in', async () => {
     const first = await signIn(`code-ada-${run}`)
     const [user] = await db.select().from(users).where(eq(users.workosUserId, ada.user.id))

@@ -4,7 +4,7 @@ import { and, eq } from 'drizzle-orm'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { memberships, users, workspaces } from '@dazbee/db'
-import { Invite, SignedIn, WorkspaceMember } from '@dazbee/schema'
+import { DazbeeInvite, Invite, SignedIn, WorkspaceMember } from '@dazbee/schema'
 
 import { createApp } from '../app.ts'
 import { db, request as askTestApp, run, sessionSecret, storage, syncSecret, workos, workspace } from '../test-api.ts'
@@ -186,5 +186,43 @@ describe('accepting a development invite', () => {
       status: 404,
       json: { error: 'Not found' },
     })
+  })
+})
+
+describe('the stand-in for Dazbee invites', () => {
+  it('sends a Dazbee invite without WorkOS, whose link signs up its person with a workspace of their own', async () => {
+    const early = createApp({
+      db,
+      storage,
+      sessionOf: tokenSession(sessionSecret),
+      syncSecret,
+      build: 'test-build',
+      invites: { workos: null, dev: { provider: dev, secret: sessionSecret } },
+      admins: new Set([owner.email]),
+    })
+    const post = async (path: string, body: unknown, token?: string) => {
+      const response = await early.request(path, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify(body),
+      })
+      return { status: response.status, json: (await response.json()) as unknown }
+    }
+    const email = `dev-dazbee-${run}@example.com`
+    const sent = await post('/admin/invites', { email }, ownerToken)
+    expect(sent.status).toBe(201)
+    const linkId = new URL(DazbeeInvite.parse(sent.json).link).searchParams.get('invite') ?? ''
+
+    const accepted = await post('/auth/dev/accept', { invite: linkId })
+    expect(accepted.status).toBe(200)
+    const { open } = SignedIn.parse(accepted.json)
+    const [person] = await db.select({ id: users.id }).from(users).where(eq(users.email, email))
+    expect(
+      await db
+        .select({ role: memberships.role, workspaceId: memberships.workspaceId })
+        .from(memberships)
+        .where(eq(memberships.userId, person?.id ?? '')),
+    ).toEqual([{ role: 'owner', workspaceId: open }])
+    expect((await post('/auth/dev/accept', { invite: linkId })).status).toBe(400)
   })
 })

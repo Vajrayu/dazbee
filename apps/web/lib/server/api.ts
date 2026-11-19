@@ -62,12 +62,14 @@ const API_URL = process.env.API_URL ?? 'http://localhost:8787'
 
 /**
  * WorkOS's sign-in page for this state, or null when sign-in is not set up (#58). It carries the token
- * of the invite the person came from, so WorkOS accepts it; a token no invite could have is left out.
+ * of the invite the person came from, so WorkOS accepts it; a token no invite could have is left out. A site
+ * with a /callback of its own, the early-access admin page's, gives it as `redirectUri`.
  */
-export async function signInLink(state: string, invitationToken?: string) {
+export async function signInLink(state: string, invitationToken?: string, redirectUri?: string) {
   const query = new URLSearchParams({ state })
   const token = InvitationToken.safeParse(invitationToken)
   if (token.success) query.set('invitationToken', token.data)
+  if (redirectUri) query.set('redirectUri', redirectUri)
   try {
     return (await call(SignInLink, `/auth/sign-in-url?${query}`, undefined, { signIn: false })).url
   } catch (e) {
@@ -403,14 +405,18 @@ export const getBrandKit = (workspaceId: string, brandId: string) =>
 export const saveBrandKit = (workspaceId: string, brandId: string, kit: BrandKit) =>
   call(BrandKit, `${brandRoot(workspaceId, brandId)}/kit`, { method: 'PUT', body: kit })
 
+/** A request to the API: its method, its body sent as JSON, and headers of its own. */
+type CallInit = { method: string; body?: unknown; headers?: Record<string, string> }
+
 /**
  * Calls the API as the signed-in person. Without a session the API answers 401, and the person is
- * sent to sign in; routes that must answer instead pass `signIn: false`.
+ * sent to sign in, with the early-access notice when early access refused them; routes that must answer
+ * instead pass `signIn: false`.
  */
 export async function call<T extends z.ZodType>(
   schema: T,
   path: string,
-  init?: { method: string; body?: unknown },
+  init?: CallInit,
   { signIn = true } = {},
 ): Promise<z.infer<T>> {
   const response = await send(path, init, { signIn })
@@ -430,9 +436,9 @@ export function workspaceRoot(workspaceId: string) {
 }
 
 /** Sends a request to the API as the signed-in person, as `call` does, and gives the answer unread. */
-async function send(path: string, init?: { method: string; body?: unknown }, { signIn = true } = {}) {
+async function send(path: string, init?: CallInit, { signIn = true } = {}) {
   const token = (await cookies()).get(SESSION_COOKIE)?.value
-  const headers: Record<string, string> = {}
+  const headers: Record<string, string> = { ...init?.headers }
   if (token) headers.authorization = `Bearer ${token}`
   if (init?.body !== undefined) headers['content-type'] = 'application/json'
   const response = await fetch(`${API_URL}${path}`, {
@@ -440,8 +446,17 @@ async function send(path: string, init?: { method: string; body?: unknown }, { s
     headers,
     ...(init ? { method: init.method, ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }) } : {}),
   })
-  if (response.status === 401 && signIn) redirect('/login')
+  if (response.status === 401 && signIn) redirect(await signInAgain(response))
   return response
+}
+
+/**
+ * Where a person the API answered 401 signs in again: /login, with the early-access notice when early access
+ * refused them, as it does a person whose access an admin removed.
+ */
+async function signInAgain(response: Response): Promise<string> {
+  const refused = SignInRefused.safeParse(await response.json().catch(() => null))
+  return refused.success ? `/login?error=${refused.data.reason}` : '/login'
 }
 
 /** The API's path of a brand of a workspace. */

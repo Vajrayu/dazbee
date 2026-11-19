@@ -5,8 +5,9 @@
 // tint under the pointer and with no outlines. What a row's action did shows under that row: the link copied,
 // or the invite sent again. A link the browser won't copy shows in the row to copy by hand. Why the API
 // refused an action shows under the heading, so it stays when the invite has left the list, as one revoked in
-// another tab has. Its note, done or refused, is the one the other parts of Settings show too.
-import { useState, useTransition } from 'react'
+// another tab has. Its note, done or refused, is the one the other parts of Settings show too. The row
+// (`InviteRow`) serves the early-access admin page's pending Dazbee invites too, with Cancel in place of Revoke.
+import { type ReactNode, useState, useTransition } from 'react'
 
 import type { BrandSummary, Invite } from '@dazbee/schema'
 
@@ -19,6 +20,14 @@ import { canLimit } from '@/lib/settings-rights.ts'
 
 import { brandsLabel } from './brands-choice.tsx'
 import { Note } from './note.tsx'
+
+/** An invite as its row shows it: to whom, until when, and the link that accepts it. */
+export interface RowInvite {
+  id: string
+  email: string
+  expiresAt: string
+  link: string
+}
 
 /** What a row's last action did. */
 type Answer = { done: string } | { link: string }
@@ -47,9 +56,16 @@ export function PendingInvites({
         {invites.map((each) => (
           <InviteRow
             key={each.id}
-            workspaceId={workspaceId}
             invite={each}
-            brands={brands}
+            detail={
+              <>
+                {t.roles[each.role]}
+                {canLimit(each.role) && ` · ${brandsLabel(each.brandIds, brands, t.brands)}`} ·{' '}
+              </>
+            }
+            revoke={{ label: t.pending.revoke, labelFor: t.pending.revokeFor }}
+            onResend={() => resend(workspaceId, each.id)}
+            onRevoke={() => revoke(workspaceId, each.id)}
             onAct={() => setRefusal(null)}
             onRefused={(error) => setRefusal(format(t.pending.refused, { email: each.email, error }))}
           />
@@ -59,17 +75,27 @@ export function PendingInvites({
   )
 }
 
-/** One pending invite, with its actions and what the last of them did. */
-function InviteRow({
-  workspaceId,
+/**
+ * One pending invite, its email, `detail` and expiry, with Copy link, Resend and Revoke (in the words
+ * `revoke` gives), and what the last of them did.
+ */
+export function InviteRow({
   invite,
-  brands,
+  detail,
+  revoke: revokeWords,
+  onResend,
+  onRevoke,
   onAct,
   onRefused,
 }: {
-  workspaceId: string
-  invite: Invite
-  brands: BrandSummary[]
+  invite: RowInvite
+  /** What shows before the expiry under the email, ending in its separator. */
+  detail?: ReactNode
+  /** The words of the action that takes the invite back: its button, and its name for a screen reader. */
+  revoke: { label: string; labelFor: string }
+  /** Each action, saying why the API refused it, or giving null. */
+  onResend: () => Promise<string | null>
+  onRevoke: () => Promise<string | null>
   /** Hears that an action started, so the last one's refusal goes. */
   onAct: () => void
   /** Hears why the API refused an action. */
@@ -94,11 +120,11 @@ function InviteRow({
         () => setAnswer({ link: invite.link }),
       )
   }
-  function act(change: (workspaceId: string, inviteId: string) => Promise<string | null>, done: string | null) {
+  function act(change: () => Promise<string | null>, done: string | null) {
     setAnswer(null)
     onAct()
     startTransition(async () => {
-      const error = await change(workspaceId, invite.id)
+      const error = await change()
       if (error) onRefused(error)
       else if (done) setAnswer({ done })
     })
@@ -117,8 +143,7 @@ function InviteRow({
             {invite.email}
           </span>
           <span className="text-caption text-subtle [overflow-wrap:anywhere]">
-            {t.roles[invite.role]}
-            {canLimit(invite.role) && ` · ${brandsLabel(invite.brandIds, brands, t.brands)}`} ·{' '}
+            {detail}
             <time dateTime={invite.expiresAt}>{format(p.expires, { date: expires })}</time>
           </span>
         </span>
@@ -135,7 +160,7 @@ function InviteRow({
           <button
             type="button"
             disabled={busy}
-            onClick={() => act(resend, p.resent)}
+            onClick={() => act(onResend, p.resent)}
             aria-label={format(p.resendTo, { email: invite.email })}
             className={action}
           >
@@ -144,11 +169,11 @@ function InviteRow({
           <button
             type="button"
             disabled={busy}
-            onClick={() => act(revoke, null)}
-            aria-label={format(p.revokeFor, { email: invite.email })}
+            onClick={() => act(onRevoke, null)}
+            aria-label={format(revokeWords.labelFor, { email: invite.email })}
             className={cn(action, 'text-danger hover:text-danger')}
           >
-            {p.revoke}
+            {revokeWords.label}
           </button>
         </span>
       </div>
