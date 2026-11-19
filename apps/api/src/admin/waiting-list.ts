@@ -25,15 +25,15 @@ const MAX_ADDRESSES = 10_000
 
 /**
  * Records a request to join, or updates the request of the same email with its new name, company, note and
- * time; one already invited stays invited. Answers nothing, so a request never tells whether the email has
- * an account.
+ * time, back on the list if it was invited, since its invite may have lapsed. Answers nothing, so a request
+ * never tells whether the email has an account.
  */
 export async function requestAccess(db: Db, request: RequestAccess, now = new Date()): Promise<void> {
   const fields = { name: request.name, company: request.company, note: request.note, requestedAt: now }
   await db
     .insert(accessRequests)
     .values({ id: newId(), email: request.email, ...fields })
-    .onConflictDoUpdate({ target: accessRequests.email, set: fields })
+    .onConflictDoUpdate({ target: accessRequests.email, set: { ...fields, invitedAt: null } })
 }
 
 /** The requests not yet invited, newest first. */

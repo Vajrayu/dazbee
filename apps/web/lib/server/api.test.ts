@@ -4,7 +4,17 @@ import { redirect } from 'next/navigation'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
-import { ApiFailure, call, completeSignIn, getAccess, getRole, getWorkspace, listDesigns, signInLink } from './api.ts'
+import {
+  ApiFailure,
+  call,
+  completeSignIn,
+  findMe,
+  getAccess,
+  getRole,
+  getWorkspace,
+  listDesigns,
+  signInLink,
+} from './api.ts'
 
 /** The person `/me` answers with: the Owner of one workspace and an Editor limited to some brands in another. */
 const ME = {
@@ -152,6 +162,17 @@ describe('call', () => {
     answer401({ error: 'Dazbee is in early access', reason: 'early-access' })
     await call(z.null(), '/me').catch(() => {})
     expect(redirect).toHaveBeenCalledWith('/login?error=early-access')
+  })
+
+  it('sends a person early access refused to sign in with its notice from findMe too, and gives null to anyone else', async () => {
+    vi.mocked(redirect).mockClear()
+    answer401({ error: 'Dazbee is in early access', reason: 'early-access' })
+    await findMe()
+    expect(redirect).toHaveBeenCalledWith('/login?error=early-access')
+    vi.mocked(redirect).mockClear()
+    answer401({ error: 'Sign in first' })
+    expect(await findMe()).toBeNull()
+    expect(redirect).not.toHaveBeenCalled()
   })
 
   it('sends a person with no session to sign in', async () => {

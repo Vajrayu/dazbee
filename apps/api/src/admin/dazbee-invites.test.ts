@@ -141,6 +141,21 @@ describe('removing a person', () => {
     expect((await listed()).removed.map((each) => each.email)).not.toContain(person.user.email)
   })
 
+  it('keeps them out when the new invite is cancelled before they open it', async () => {
+    const { person, code, invite } = await joined()
+    await ask(admin.token, 'POST', `/admin/invites/${invite.id}/remove`)
+    const { invite: again } = await inviteAs(admin.token, person.user.email)
+    const waiting = await signIn(code)
+    expect(waiting.status).toBe(403)
+    expect(SignInRefused.parse(waiting.json).reason).toBe('open-invite')
+
+    expect((await ask(admin.token, 'DELETE', `/admin/invites/${again.id}`)).status).toBe(204)
+    const refused = await signIn(code)
+    expect(refused.status).toBe(403)
+    expect(SignInRefused.parse(refused.json).reason).toBe('early-access')
+    expect((await listed()).removed.map((each) => each.email)).toContain(person.user.email)
+  })
+
   it('never refuses an admin', async () => {
     const other = await addAdmin()
     expect((await ask(other.token, 'GET', '/me')).status).toBe(200)

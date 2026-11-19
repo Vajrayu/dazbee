@@ -1,7 +1,8 @@
 // Early access: while the allow-list or the admins are set, sign-in lets in only an admin, a person who
 // already has a membership, one whose sign-in accepts an invite (a workspace's or a Dazbee invite), and one
 // whose verified email is on the list. A person whose access an admin removed is refused at sign-in, early
-// access or not, and their session's requests are answered 401. Asking only reads, so a refused person leaves
+// access or not, unless their sign-in accepts a new Dazbee invite, and their session's requests are answered
+// 401. Asking only reads, so a refused person leaves
 // no row behind, and their WorkOS session is ended so they can sign in as someone else.
 import { eq } from 'drizzle-orm'
 
@@ -48,21 +49,22 @@ export function allowList(env: NodeJS.ProcessEnv = process.env): AllowList {
 
 /**
  * Why early access refuses the person, or null when it lets them in. A verified admin is always let in, and
- * a person whose access was removed always refused. Otherwise, with neither an allow-list nor admins, anyone
- * is let in; else a person whose sign-in accepts an invite, whose verified email is on the list, or who
- * already has a membership. A refused person whose verified email has an invite still pending with its
- * provider is told to open it.
+ * a person whose access was removed always refused, unless their sign-in accepts a Dazbee invite. Otherwise,
+ * with neither an allow-list nor admins, anyone is let in; else a person whose sign-in accepts an invite,
+ * whose verified email is on the list, or who already has a membership. A refused person whose verified
+ * email has an invite still pending with its provider is told to open it.
  */
 export async function earlyAccessRefusal(
   db: Db | Tx,
   { allowed, admins }: EarlyAccess,
   person: SignedInPerson,
-  invites: { accepting: boolean; waiting: boolean },
+  invites: { accepting: boolean; joining: boolean; waiting: boolean },
 ): Promise<SignInRefusal | null> {
   const email = person.user.email.toLowerCase()
   const verified = person.user.emailVerified
   if (verified && admins.has(email)) return null
-  if (await isRemoved(db, email)) return 'early-access'
+  if (!invites.joining && (await isRemoved(db, email)))
+    return invites.waiting && verified ? 'open-invite' : 'early-access'
   if ((!allowed && admins.size === 0) || invites.accepting) return null
   if (verified && allowed?.has(email)) return null
   if (await hasMembership(db, person.user.id)) return null

@@ -1,9 +1,10 @@
 // Dazbee invites: an admin's invites of an email to Dazbee during early access, each a provider's invitation
 // to no organization, whose person signs up with a workspace of their own (`completeSignIn`). Inviting an
 // email resends its pending invite, or replaces an expired one; an email that already has an account gets
-// none, unless its access was removed, which inviting it again gives back. Removing a person who joined
-// keeps their account and designs, and refuses their sign-in and their session's requests. Removal holds
-// for the email: every accepted invite of it is marked, and inviting it again clears them all.
+// none, unless its access was removed. Removing a person who joined keeps their account and designs, and
+// refuses their sign-in and their session's requests. Removal holds for the email: every accepted invite of
+// it is marked, and accepting a new invite of it clears them all, so an invite cancelled or left to expire
+// gives nothing back.
 // As with a workspace's invites, the provider is never called inside a transaction: a short transaction
 // checks and reserves, the provider is called, then the row is written.
 import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lte, type SQL, sql } from 'drizzle-orm'
@@ -52,7 +53,7 @@ const SENDING_MS = 60_000
  * Invites `email` to Dazbee as the admin `invitedBy`: refused for an email with an account whose access
  * wasn't removed, a resend of its pending invite, or a new invite, any expired one revoked first. A new
  * invite is reserved first, under a lock on the email, as a row being sent; the provider is called after
- * that transaction, and the row is filled in, with the email's removal cleared, or deleted when sending fails.
+ * that transaction, and the row is filled in, or deleted when sending fails.
  */
 export async function inviteToDazbee(
   db: Db,
@@ -114,19 +115,13 @@ export async function inviteToDazbee(
     throw e
   }
   try {
-    return await db.transaction(async (tx) => {
-      const [row] = await tx
-        .update(dazbeeInvites)
-        .set({ providerInviteId: invitation.id, link: invitation.link, expiresAt: invitation.expiresAt })
-        .where(eq(dazbeeInvites.id, id))
-        .returning(summary)
-      if (!row) throw new Error('The invite was not recorded')
-      await tx
-        .update(dazbeeInvites)
-        .set({ removedAt: null })
-        .where(and(ofEmail, isNotNull(dazbeeInvites.removedAt)))
-      return dazbeeInvite(row)
-    })
+    const [row] = await db
+      .update(dazbeeInvites)
+      .set({ providerInviteId: invitation.id, link: invitation.link, expiresAt: invitation.expiresAt })
+      .where(eq(dazbeeInvites.id, id))
+      .returning(summary)
+    if (!row) throw new Error('The invite was not recorded')
+    return dazbeeInvite(row)
   } catch (e) {
     await revokeQuietly(provider, invitation.id)
     await deleteQuietly(db, id)
@@ -213,14 +208,22 @@ export async function pendingDazbeeInvites(
     .orderBy(asc(dazbeeInvites.createdAt), asc(dazbeeInvites.id))
 }
 
-/** Marks a pending Dazbee invite accepted; false when it is no longer pending. */
+/**
+ * Marks a pending Dazbee invite accepted, and clears its email's removal, which gives a removed person their
+ * access back; false when it is no longer pending.
+ */
 export async function acceptDazbeeInvite(db: Db | Tx, inviteId: string, now = new Date()): Promise<boolean> {
   const [row] = await db
     .update(dazbeeInvites)
     .set({ acceptedAt: now })
     .where(and(eq(dazbeeInvites.id, inviteId), pending(now)))
-    .returning({ id: dazbeeInvites.id })
-  return Boolean(row)
+    .returning({ email: dazbeeInvites.email })
+  if (!row) return false
+  await db
+    .update(dazbeeInvites)
+    .set({ removedAt: null })
+    .where(and(eq(dazbeeInvites.email, row.email), isNotNull(dazbeeInvites.removedAt)))
+  return true
 }
 
 /** Whether an admin removed the access of the person with this email. */

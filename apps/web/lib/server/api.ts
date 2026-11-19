@@ -96,13 +96,18 @@ export async function completeSignIn(code: string): Promise<SignedIn | { refused
 export const signOutLink = async () =>
   (await call(SignedOut, '/auth/sign-out', { method: 'POST' }, { signIn: false })).logoutUrl
 
-/** The signed-in person, their workspaces and the one to open; null when nobody is signed in. */
+/**
+ * The signed-in person, their workspaces and the one to open; null when nobody is signed in. A person early
+ * access refused, as it does one whose access an admin removed, is sent to sign in with its notice.
+ */
 export async function findMe() {
   try {
     return await call(Me, '/me', undefined, { signIn: false })
   } catch (e) {
-    if (e instanceof ApiFailure && e.status === 401) return null
-    throw e
+    if (!(e instanceof ApiFailure) || e.status !== 401) throw e
+    const refused = SignInRefused.safeParse(e.body)
+    if (refused.success) redirect(`/login?error=${refused.data.reason}`)
+    return null
   }
 }
 

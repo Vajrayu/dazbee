@@ -53,7 +53,16 @@ export function RequestAccess({ turnstileSiteKey }: { turnstileSiteKey: string }
   const [open, setOpen] = useState(false)
   // The token Turnstile gave the person, empty until it does or once it expires.
   const [token, setToken] = useState('')
-  const [answer, send, sending] = useActionState<RequestAnswer, FormData>(requestToJoin, null)
+  // Each refused send counts an attempt, which renders Turnstile's check anew: a token is good once only.
+  const [attempt, setAttempt] = useState(0)
+  const [answer, send, sending] = useActionState<RequestAnswer, FormData>(async (before, form) => {
+    const answered = await requestToJoin(before, form)
+    if (answered && 'error' in answered) {
+      setToken('')
+      setAttempt((n) => n + 1)
+    }
+    return answered
+  }, null)
   if (answer && 'sent' in answer)
     return (
       <div data-testid="request-access-sent" className="w-full max-w-[37rem]">
@@ -129,7 +138,7 @@ export function RequestAccess({ turnstileSiteKey }: { turnstileSiteKey: string }
       />
       {turnstileSiteKey && (
         <>
-          <TurnstileCheck siteKey={turnstileSiteKey} onToken={setToken} />
+          <TurnstileCheck key={attempt} siteKey={turnstileSiteKey} onToken={setToken} />
           <input type="hidden" name="turnstile_token" value={token} />
         </>
       )}

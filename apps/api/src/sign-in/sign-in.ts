@@ -164,6 +164,7 @@ export async function completeSignIn(
   const held = await readInvites(db, invites, { email: person.user.email, workosUserId: person.user.id })
   const refusal = await earlyAccessRefusal(db, access, person, {
     accepting: held.accepted.length > 0 || held.dazbee.length > 0,
+    joining: held.dazbee.length > 0,
     waiting: held.waiting,
   })
   // An unread invite may be one they accepted: refusing them would be wrong.
@@ -185,7 +186,11 @@ export async function completeSignIn(
     // A person about to get a workspace of their own is asked again, with no workspace invite or membership
     // left to let them in, and a Dazbee invite only if it was accepted here; a refusal undoes their record.
     if (!open) {
-      const again = await earlyAccessRefusal(tx, access, person, { accepting: joined, waiting: held.waiting })
+      const again = await earlyAccessRefusal(tx, access, person, {
+        accepting: joined,
+        joining: joined,
+        waiting: held.waiting,
+      })
       if (again) throw new EarlyAccessRefused(again)
     }
     return { userId: user.id, found: open }

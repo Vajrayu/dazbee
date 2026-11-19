@@ -164,6 +164,10 @@ describe('requests to join', () => {
     expect((await waitingList()).map((each) => each.email)).not.toContain(request.email)
     const pending = DazbeeInvites.parse((await ask(admin.token, 'GET', '/admin/invites')).json).pending
     expect(pending.map((each) => each.email)).toContain(request.email)
+
+    // Asking again, as one whose invite lapsed would, puts the request back on the list.
+    await requestToJoin(request, newAddress())
+    expect((await waitingList()).map((each) => each.email)).toContain(request.email)
   })
 
   it('lets an admin dismiss a request, which deletes it', async () => {
