@@ -1,0 +1,24 @@
+{
+  "name": "@dazbee/load-test",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "editors": "node editors.ts"
+  },
+  "devDependencies": {
+    "@dazbee/config": "workspace:*",
+    "@dazbee/db": "workspace:*",
+    "@dazbee/doc": "workspace:*",
+    "@dazbee/schema": "workspace:*",
+    "@dazbee/session-token": "workspace:*",
+    "@dazbee/storage": "workspace:*",
+    "@types/node": "^22.20.5",
+    "drizzle-orm": "^0.45.4",
+    "eslint": "^9.39.5",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.5"
+  }
+}

@@ -810,6 +810,42 @@ importers:
         specifier: ^5.0.5
         version: 5.0.5(@types/node@22.20.5)(vite@7.3.7(@types/node@22.20.5)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.15))
 
+  tools/load:
+    devDependencies:
+      '@dazbee/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@dazbee/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@dazbee/doc':
+        specifier: workspace:*
+        version: link:../../packages/doc
+      '@dazbee/schema':
+        specifier: workspace:*
+        version: link:../../packages/schema
+      '@dazbee/session-token':
+        specifier: workspace:*
+        version: link:../../packages/session-token
+      '@dazbee/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
+      '@types/node':
+        specifier: ^22.20.5
+        version: 22.20.5
+      drizzle-orm:
+        specifier: ^0.45.4
+        version: 0.45.4(@types/pg@8.23.1)(pg@8.23.1)
+      eslint:
+        specifier: ^9.39.5
+        version: 9.39.5(jiti@2.7.0)(supports-color@7.2.0)
+      typescript:
+        specifier: ~6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@types/node@22.20.5)(vite@7.3.7(@types/node@22.20.5)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.15))
+
 packages:
 
   '@alloc/quick-lru@5.3.0':
