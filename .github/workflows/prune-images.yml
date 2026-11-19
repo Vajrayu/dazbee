@@ -1,0 +1,25 @@
+# Keeps each app's last 10 image versions in the registry. It runs apart from CI, so a registry API
+# hiccup never fails a merge or holds back its deploy.
+name: Prune images
+
+on:
+  schedule:
+    - cron: '30 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  packages: write
+
+jobs:
+  prune:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [web, api, sync]
+    steps:
+      - uses: actions/delete-package-versions@v5
+        with:
+          package-name: dazbee-${{ matrix.app }}
+          package-type: container
+          min-versions-to-keep: 10

@@ -163,25 +163,6 @@ jobs:
             docker push "$REGISTRY/dazbee-$app:$GITHUB_SHA"
             docker push "$REGISTRY/dazbee-$app:latest"
           done
-      # The registry keeps each app's last 10 versions.
-      - if: env.PUSH == 'true'
-        uses: actions/delete-package-versions@v5
-        with:
-          package-name: dazbee-web
-          package-type: container
-          min-versions-to-keep: 10
-      - if: env.PUSH == 'true'
-        uses: actions/delete-package-versions@v5
-        with:
-          package-name: dazbee-api
-          package-type: container
-          min-versions-to-keep: 10
-      - if: env.PUSH == 'true'
-        uses: actions/delete-package-versions@v5
-        with:
-          package-name: dazbee-sync
-          package-type: container
-          min-versions-to-keep: 10
 
   # The one check a pull request needs: the tests and the images both passed.
   check:
