@@ -97,6 +97,14 @@ describe('findViolations', () => {
     expect(violations).toEqual(['@dazbee/doc (a package) depends on @dazbee/pixels (a test suite)'])
   })
 
+  it('flags a package that depends on a tool', () => {
+    const violations = findViolations([
+      workspacePackage('@dazbee/load-test', 'tools/load'),
+      workspacePackage('@dazbee/db', 'packages/db', ['@dazbee/load-test']),
+    ])
+    expect(violations).toEqual(['@dazbee/db (a package) depends on @dazbee/load-test (a tool)'])
+  })
+
   it('flags a core package that depends on one later in schema → doc → renderer → editor', () => {
     const violations = findViolations([
       workspacePackage('@dazbee/schema', 'packages/schema', ['@dazbee/renderer']),

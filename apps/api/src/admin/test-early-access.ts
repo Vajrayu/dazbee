@@ -5,10 +5,11 @@ import { randomUUID } from 'node:crypto'
 import type { Hono } from 'hono'
 
 import { CreateDazbeeInvite, DazbeeInvite, SignedIn } from '@dazbee/schema'
+import { signSessionToken } from '@dazbee/session-token'
 
 import { createApp } from '../app.ts'
 import type { Env } from '../http.ts'
-import { signSessionToken, tokenSession } from '../sign-in/session.ts'
+import { tokenSession } from '../sign-in/session.ts'
 import type { SignedInPerson } from '../sign-in/sign-in.ts'
 import { addPerson, addWorkspace, db, run, sessionSecret, storage, syncSecret, workos } from '../test-api.ts'
 import type { TurnstileCheck } from './turnstile.ts'

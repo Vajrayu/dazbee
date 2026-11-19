@@ -6,9 +6,10 @@ import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 
 import { invites, memberships, users, workspaces } from '@dazbee/db'
 import { ApiError, Invite, SignedIn, SignedOut, SignInLink, WorkspaceSummary } from '@dazbee/schema'
+import { readSessionToken, SESSION_TTL_MS, signSessionToken } from '@dazbee/session-token'
 
 import { app, call as callAs, db, sessionSecret as secret, SHORT_ID, workos, workspace } from '../test-api.ts'
-import { bearerToken, readSessionToken, SESSION_TTL_MS, sessionOfRequest, signSessionToken } from './session.ts'
+import { bearerToken, sessionOfRequest } from './session.ts'
 import { accessTokenSessionId, type SignedInPerson, workosProvider, workosSettings } from './sign-in.ts'
 
 const run = randomUUID().slice(0, 8)
@@ -356,27 +357,7 @@ describe('accepting an invite at sign-in', () => {
   })
 })
 
-describe('session tokens', () => {
-  const session = { userId: 'u', workosSessionId: null }
-
-  it('reads back what was signed, until it expires', () => {
-    const { token, expiresAt } = signSessionToken(secret, session, 1_000)
-    expect(readSessionToken(secret, token, 2_000)).toEqual({ ...session, expiresAt })
-    expect(readSessionToken(secret, token, expiresAt)).toBeNull()
-  })
-
-  it('refuses a token signed with another secret, changed, or malformed', () => {
-    const { token } = signSessionToken(secret, session)
-    expect(readSessionToken('another-secret-'.padEnd(32, 'y'), token)).toBeNull()
-    const [text, signature] = token.split('.')
-    const changed = Buffer.from(
-      JSON.stringify({ ...session, userId: 'other', expiresAt: Date.now() + 60_000 }),
-    ).toString('base64url')
-    expect(readSessionToken(secret, `${changed}.${signature}`)).toBeNull()
-    expect(readSessionToken(secret, text ?? '')).toBeNull()
-    expect(readSessionToken(secret, `${token}.more`)).toBeNull()
-  })
-
+describe('bearer tokens', () => {
   it('takes only a bearer token from the authorization header', () => {
     expect(bearerToken(new Request('http://x', { headers: { authorization: 'Bearer abc.def' } }))).toBe('abc.def')
     expect(bearerToken(new Request('http://x', { headers: { authorization: 'Basic abc' } }))).toBeNull()

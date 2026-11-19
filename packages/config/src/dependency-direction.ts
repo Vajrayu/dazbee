@@ -16,8 +16,13 @@ export interface WorkspacePackage {
 const CORE_CHAIN = ['@dazbee/schema', '@dazbee/doc', '@dazbee/renderer', '@dazbee/editor']
 const CHAIN_TEXT = CORE_CHAIN.map((name) => name.replace('@dazbee/', '')).join(' → ')
 
-/** What a workspace root holds. Packages may never depend on apps or test suites. */
-const ROOT_KINDS: Record<string, string> = { apps: 'an app', packages: 'a package', tests: 'a test suite' }
+/** What a workspace root holds. Packages may never depend on apps, test suites or tools. */
+const ROOT_KINDS: Record<string, string> = {
+  apps: 'an app',
+  packages: 'a package',
+  tests: 'a test suite',
+  tools: 'a tool',
+}
 const kindOf = (w: WorkspacePackage) => ROOT_KINDS[w.dir.split('/')[0] ?? '']
 
 const DEP_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']

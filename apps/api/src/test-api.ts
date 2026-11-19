@@ -9,10 +9,11 @@ import { afterAll, beforeAll, expect } from 'vitest'
 
 import { brands, membershipBrands, memberships, openDatabase, users, workspaces } from '@dazbee/db'
 import { AssetSummary, type MemberRole, UploadTicket } from '@dazbee/schema'
+import { signSessionToken } from '@dazbee/session-token'
 import { openStorage, storageSettings } from '@dazbee/storage'
 
 import { createApp } from './app.ts'
-import { signSessionToken, tokenSession } from './sign-in/session.ts'
+import { tokenSession } from './sign-in/session.ts'
 import { fakeWorkos } from './sign-in/test-workos.ts'
 import { DATABASE_URL } from './test-database.ts'
 import { sha256 } from './test-files.ts'

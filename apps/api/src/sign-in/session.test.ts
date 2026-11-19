@@ -1,4 +1,4 @@
-// What a session token carries, and the development session against Postgres from Docker Compose
+// The development session against Postgres from Docker Compose
 // (`docker compose up -d --wait postgres`).
 import { and, eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
@@ -7,27 +7,8 @@ import { memberships, users } from '@dazbee/db'
 import { DesignSummary, Me, VersionSummary } from '@dazbee/schema'
 
 import { createApp } from '../app.ts'
-import { addPerson, db, sessionSecret, storage, syncSecret } from '../test-api.ts'
-import {
-  DEV_BRANDS,
-  DEV_USER,
-  DEV_WORKSPACE,
-  devSession,
-  readSessionToken,
-  seedDevelopment,
-  signSessionToken,
-} from './session.ts'
-
-describe('session tokens', () => {
-  it('round-trip the person and their WorkOS session without a workspace, even one a token was signed with', () => {
-    const person = { userId: 'u', workosSessionId: 'session_1' }
-    const { token, expiresAt } = signSessionToken(sessionSecret, person)
-    expect(readSessionToken(sessionSecret, token)).toEqual({ ...person, expiresAt })
-    const withWorkspace = { ...person, workspaceId: 'w' }
-    const signed = signSessionToken(sessionSecret, withWorkspace)
-    expect(readSessionToken(sessionSecret, signed.token)).toEqual({ ...person, expiresAt: signed.expiresAt })
-  })
-})
+import { addPerson, db, storage, syncSecret } from '../test-api.ts'
+import { DEV_BRANDS, DEV_USER, DEV_WORKSPACE, devSession, seedDevelopment } from './session.ts'
 
 describe('seedDevelopment', () => {
   const app = createApp({ db, storage, sessionOf: devSession, syncSecret, build: 'test-build' })

@@ -11,12 +11,13 @@ import {
   type SignInLink,
   type SignInRefused,
 } from '@dazbee/schema'
+import { readSessionToken } from '@dazbee/session-token'
 
 import { body, type Env, error } from '../http.ts'
 import { logEvent } from '../log.ts'
 import type { InvitesProviders } from '../members/invites-provider.ts'
 import { EarlyAccessRefused, endRefusedSession } from './early-access.ts'
-import { bearerToken, readSessionToken } from './session.ts'
+import { bearerToken } from './session.ts'
 import { completeSignIn, type SignedInPerson, type SignInSettings, SignInUnfinished } from './sign-in.ts'
 
 export function signInRoutes({
