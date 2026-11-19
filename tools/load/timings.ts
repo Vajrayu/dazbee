@@ -78,11 +78,6 @@ export function passed(summary: Summary): Passed {
   }
 }
 
-/** Whether a summary passed any limit. */
-export function passedAny(summary: Summary): boolean {
-  return Object.values(passed(summary)).some(Boolean)
-}
-
 /** The count, median and slowest of `times`, with `failures`. */
 export function summarize(times: readonly number[], failures: number): Summary {
   const sorted = [...times].sort((a, b) => a - b)

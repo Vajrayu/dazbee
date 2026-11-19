@@ -10,18 +10,19 @@
 //
 // The whole run against production, from the repo's root, with the server's SSH host as <server>:
 //
-//   1. Copy this folder to the server, and make the people in a one-off container of the live API,
-//      with the folder mounted in the API's workspace so its packages resolve:
+//   1. Copy this folder's server scripts to the server, and make the people in a one-off container of
+//      the live API, with the folder mounted in the API's workspace so its packages resolve:
+//        ssh <server> mkdir -p /root/load
 //        scp tools/load/{load-workspace,setup,clean}.ts <server>:/root/load/
 //        ssh <server> 'mkdir -p -m 700 /root/load-out && chown 1000 /root/load-out && cd /opt/dazbee &&
 //          docker compose -f deploy/compose.yml --project-directory . --env-file .env --env-file live/images.env
 //          run --rm --no-deps -v /root/load:/repo/apps/api/load:ro -v /root/load-out:/out
 //          api-$(cat live/api) node apps/api/load/setup.ts 100 /out/people.json'
-//   2. Copy the file here, and remove it from the server:
-//        scp <server>:/root/load-out/people.json . && ssh <server> rm -r /root/load-out
+//   2. Copy the file outside the repo, so its tokens are never committed, and remove it from the server:
+//        scp <server>:/root/load-out/people.json ~/dazbee-load-people.json && ssh <server> rm -r /root/load-out
 //   3. Run this, while `docker stats` and `docker ps` run on the server.
 //   4. Once the sync server has unloaded the designs (a minute after the last tab leaves), clean up in
-//      the same kind of container, with `node apps/api/load/clean.ts <workspace id>`, and delete the file.
+//      the same kind of container, with `node apps/api/load/clean.ts <workspace id>`, and delete the file and /root/load.
 import { readFileSync } from 'node:fs'
 import { parseArgs } from 'node:util'
 
@@ -114,13 +115,20 @@ stop(
     : `no limit passed up to ${steps.at(-1)} people`,
 )
 
-/** When in a step a person's Brands page load or upload starts: at random between the arrivals and the quiet end. */
-function at() {
-  return ARRIVE_MS + Math.random() * (stepMs - ARRIVE_MS - QUIET_END_MS)
+/** Closes every tab and says where the ramp stopped. */
+function stop(why: string): never {
+  for (const person of people) person.close()
+  say(`stopped ${why}`)
+  process.exit(0)
 }
 
 function wait(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms))
+}
+
+/** When in a step a person's Brands page load or upload starts: at random between the arrivals and the quiet end. */
+function at() {
+  return ARRIVE_MS + Math.random() * (stepMs - ARRIVE_MS - QUIET_END_MS)
 }
 
 /** A summary in a few words: how many, median, slowest, failures. */
@@ -136,11 +144,4 @@ function passedBy(measure: Measure, summary: Summary): string[] {
     ...(slowest ? [`${measure}'s slowest passed ${LIMITS.slowestMs} ms`] : []),
     ...(failed ? [`${measure} failed ${summary.failures} times`] : []),
   ]
-}
-
-/** Closes every tab and says where the ramp stopped. */
-function stop(why: string): never {
-  for (const person of people) person.close()
-  say(`stopped ${why}`)
-  process.exit(0)
 }

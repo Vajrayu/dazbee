@@ -110,8 +110,9 @@ describe('deleteLoadWorkspace', () => {
     expect(await storage.list(folderOf(other.id))).toEqual([`${folderOf(other.id)}kept.png`])
   })
 
-  it('refuses a workspace that is not a load test’s, by its id or its name', async () => {
+  it('refuses a workspace that is not a load test’s, by its id or its name, and an id that is a pattern', async () => {
     await expect(deleteLoadWorkspace(db, storage, other.id)).rejects.toThrow('not a load test')
+    await expect(deleteLoadWorkspace(db, storage, 'load-test-%')).rejects.toThrow('not a load test')
     const named = `load-test-${newId()}`
     await db.insert(workspaces).values({ id: named, name: 'Northline Cycles' })
     try {

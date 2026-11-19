@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { passed, passedAny, stepTimings, summarize } from './timings.ts'
+import { passed, stepTimings, summarize } from './timings.ts'
 
 describe('stepTimings', () => {
   it('times what finished, counts what failed, and counts what still waits as taking its time so far', () => {
@@ -37,13 +37,6 @@ describe('passed', () => {
       slowest: true,
       failures: true,
     })
-  })
-})
-
-describe('passedAny', () => {
-  it('is true when one limit is passed', () => {
-    expect(passedAny({ count: 1, median: 10, slowest: 3500, failures: 0 })).toBe(true)
-    expect(passedAny({ count: 1, median: 10, slowest: 30, failures: 0 })).toBe(false)
   })
 })
 

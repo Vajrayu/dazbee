@@ -51,6 +51,9 @@ export const LOAD_WORKSPACE_NAME = 'Load test'
 
 const ID_PREFIX = 'load-test-'
 
+/** A load test workspace's id: the prefix and a new id, so no typed pattern reaches another's rows. */
+const LOAD_WORKSPACE_ID = /^load-test-[0-9a-z]{12}$/
+
 /** The brands people's designs are spread over: two, so the Brands page shows a card each. */
 const BRANDS = ['Load test brand A', 'Load test brand B']
 
@@ -133,7 +136,7 @@ export async function deleteLoadWorkspace(db: Db, storage: Storage, workspaceId:
 
 /** What is left of a load test's workspace: the rows holding its id or its ids' prefix, and its files. */
 export async function leftovers(db: Db, storage: Storage, workspaceId: string): Promise<Leftovers> {
-  if (!workspaceId.startsWith(ID_PREFIX)) throw new Error(`${workspaceId} is not a load test's workspace`)
+  checkLoadWorkspaceId(workspaceId)
   const rows: Record<string, number> = {}
   for (const column of BY_WORKSPACE) rows[column] = await count(db, column, sql`= ${workspaceId}`)
   for (const column of BY_ID_PREFIX) rows[column] = await count(db, column, sql`like ${`${workspaceId}-%`}`)
@@ -147,12 +150,17 @@ export function folderOf(workspaceId: string): string {
 
 /** Throws unless the workspace is a load test's, by its id and its name, or is already gone. */
 async function checkIsLoadWorkspace(db: Db, workspaceId: string) {
-  if (!workspaceId.startsWith(ID_PREFIX)) throw new Error(`${workspaceId} is not a load test's workspace`)
+  checkLoadWorkspaceId(workspaceId)
   const [other] = await db
     .select({ name: workspaces.name })
     .from(workspaces)
     .where(and(eq(workspaces.id, workspaceId), sql`${workspaces.name} <> ${LOAD_WORKSPACE_NAME}`))
   if (other) throw new Error(`${workspaceId} is named "${other.name}", not "${LOAD_WORKSPACE_NAME}"`)
+}
+
+/** Throws unless the id is one makeLoadWorkspace gives. */
+function checkLoadWorkspaceId(workspaceId: string) {
+  if (!LOAD_WORKSPACE_ID.test(workspaceId)) throw new Error(`${workspaceId} is not a load test's workspace`)
 }
 
 /** How many rows of `table.column`'s table match `test`. */
