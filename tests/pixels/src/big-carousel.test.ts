@@ -2,7 +2,8 @@
 // sync server's welcome to it is under 1 MB and a tab opens it from that welcome in under 300 ms.
 import { describe, expect, it } from 'vitest'
 
-import { childrenOf } from '@dazbee/doc'
+import { childrenOf, type Session } from '@dazbee/doc'
+import { holdOf } from '@dazbee/doc/test-holds'
 import { framesOf, parseDesign } from '@dazbee/schema'
 
 import { bigCarousel } from './big-carousel.ts'
@@ -43,11 +44,12 @@ describe('bigCarousel', () => {
     const welcome = welcomeText(parsed(20))
     expect(Buffer.byteLength(welcome)).toBeLessThan(MAX_BYTES)
     const runs = Array.from({ length: 5 }, () => {
-      const start = performance.now()
-      const tab = openWelcomed(welcome)
-      const ms = performance.now() - start
-      expect(Object.keys(tab.design().nodes)).toHaveLength(600)
-      tab.destroy()
+      let tab: Session | undefined
+      const ms = holdOf(() => {
+        tab = openWelcomed(welcome)
+      })
+      expect(Object.keys(tab?.design().nodes ?? {})).toHaveLength(600)
+      tab?.destroy()
       return ms
     })
     const median = [...runs].sort((a, b) => a - b)[2] ?? Infinity

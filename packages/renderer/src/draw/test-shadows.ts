@@ -5,16 +5,24 @@ import { createHash } from 'node:crypto'
 import { expect } from 'vitest'
 
 import type { Canvas } from '@dazbee/canvaskit'
+import { holdOf } from '@dazbee/doc/test-holds'
 import { FALLBACK_FAMILIES } from '@dazbee/fonts'
 import { loadFontFiles } from '@dazbee/fonts/node'
 
 import { loadCanvasKit } from '../node.ts'
-import { renderDesign, type Rendered } from '../seam.ts'
+import { renderDesign, type Rendered, renderPixels } from '../seam.ts'
 
 export interface TestLayer {
   type: 'graphic' | 'boolean' | 'box' | 'group' | 'text'
   props: Record<string, unknown>
   children?: TestLayer[]
+}
+
+/** How many times longer one drawing takes than another, from the fastest run of each, in ms. */
+export interface Cost {
+  times: number
+  ms: number
+  than: number
 }
 
 interface Frame {
@@ -58,6 +66,9 @@ export const pixel = ({ width, pixels }: Rendered, x: number, y: number) => [
 ]
 
 export const hash = (r: Rendered) => createHash('sha256').update(r.pixels).digest('hex').slice(0, 16)
+
+/** The timed rounds of `slower`, each drawing both sides once, after one untimed round. */
+const ROUNDS = 3
 
 /** An encoded image of a size drawn by `paint`, as PNG, or JPEG (which decodes opaque). */
 function encoded(width: number, height: number, paint: (canvas: Canvas) => void, jpeg = false) {
@@ -151,19 +162,37 @@ export function largestDifference(a: Rendered, b: Rendered) {
 }
 
 /**
- * How many times longer `spread` takes than `zero`: each the fastest of `runs` after one to warm
- * up, run in turn, so a busy machine slows both alike.
+ * How many times longer drawing `layers` in `frame` takes than drawing `than` in it, at `scale`
+ * times its size: the pixels only, as a raster export draws them before it encodes them.
+ *
+ * Both are drawn once untimed, so the code they run is compiled, then once each in each of ROUNDS
+ * rounds, in turn and in the other order each round, so a busy spell slows both alike; the fastest
+ * run of each counts. A run's time is how long it holds the thread (`holdOf`), which leaves out the
+ * time a busy machine keeps the thread waiting.
  */
-export function slower(spread: () => void, zero: () => void, runs: number) {
-  const fastest = [Infinity, Infinity]
-  for (let i = 0; i <= runs; i++) {
-    for (const [j, run] of [spread, zero].entries()) {
-      const start = performance.now()
-      run()
-      if (i > 0) fastest[j] = Math.min(fastest[j] ?? Infinity, performance.now() - start)
+export function slower(layers: TestLayer[], than: TestLayer[], frame: Frame, scale = 1): Cost {
+  const bytes = { fonts, fallbackFamilies: [...FALLBACK_FAMILIES], images: {} }
+  const draws = [layers, than].map((drawn) => {
+    const json = design(drawn, frame)
+    return () => void renderPixels(ck, json, 'f', bytes, undefined, scale)
+  })
+  const fastest = draws.map(() => Infinity)
+  for (let round = 0; round <= ROUNDS; round++) {
+    for (const run of round % 2 === 0 ? draws : [...draws].reverse()) {
+      const ms = holdOf(run)
+      const side = draws.indexOf(run)
+      if (round > 0) fastest[side] = Math.min(fastest[side] ?? Infinity, ms)
     }
   }
-  return (fastest[0] ?? 0) / (fastest[1] ?? 1)
+  const [ms = Infinity, thanMs = Infinity] = fastest
+  return { times: ms / thanMs, ms, than: thanMs }
+}
+
+/** The costs `slower` gave, one line for a test's log: each as its time, how many times, and the time it is compared with. */
+export function costsLine(costs: Record<string, Cost>) {
+  return Object.entries(costs)
+    .map(([name, c]) => `${name} ${c.ms.toFixed(0)} ms = ${c.times.toFixed(2)} × ${c.than.toFixed(0)} ms`)
+    .join('; ')
 }
 
 /** A design of one frame holding `layers`, as the schema reads it. */

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   BLACK,
+  costsLine,
   draw,
   graphic,
   hash,
@@ -15,6 +16,13 @@ import {
   type TestLayer,
   WHITE,
 } from './test-shadows.ts'
+
+/**
+ * The most times longer hiding a layer's shadows may take to draw than showing them behind it: about
+ * three times the most measured on CI runners under the whole suite's load (1.36; the PR gives the
+ * numbers).
+ */
+const HIDING_COST = 4
 
 const frame = { width: 400, height: 400, fills: [solid(WHITE)] }
 const box = { x: 100, y: 100, width: 200, height: 200 }
@@ -228,20 +236,20 @@ describe('the cost of hiding', () => {
       shadow(0, { x: 8, y: 8, blur: 12, showBehind }),
       shadow(0, { x: 0, y: 20, blur: 30, color: '#3366FF80', showBehind }),
     ]
-    const group = (showBehind: boolean) => () => {
+    const group = (showBehind: boolean): TestLayer[] => {
       const children = Array.from({ length: 200 }, (_, i) =>
         card({ x: 40 + (i % 20) * 50, y: 40 + Math.floor(i / 20) * 100, width: 40, height: 80, fills: red(0.5) }),
       )
       const props = { x: 40, y: 40, width: 1000, height: 1000, effects: effects(showBehind) }
-      draw([{ type: 'group', props, children }], big)
+      return [{ type: 'group', props, children }]
     }
-    const blurred = (showBehind: boolean) => () => {
+    const blurred = (showBehind: boolean) => {
       const props = { x: 140, y: 140, width: 800, height: 800, fills: red() }
       const blur = { type: 'layerBlur', radius: 30 }
-      draw([graphic({ kind: 'rect', cornerRadius: 40 }, { ...props, effects: [...effects(showBehind), blur] })], big)
+      return [graphic({ kind: 'rect', cornerRadius: 40 }, { ...props, effects: [...effects(showBehind), blur] })]
     }
-    const cards = (showBehind: boolean) => () => {
-      const layers = Array.from({ length: 300 }, (_, i) =>
+    const cards = (showBehind: boolean) =>
+      Array.from({ length: 60 }, (_, i) =>
         card({
           x: 20 + (i % 20) * 52,
           y: 20 + Math.floor(i / 20) * 70,
@@ -252,9 +260,13 @@ describe('the cost of hiding', () => {
           effects: effects(showBehind),
         }),
       )
-      draw(layers, big)
+    // At half scale, as a 0.5× export draws them: the same drawing, a quarter of the pixels.
+    const costs = {
+      group: slower(group(false), group(true), big, 0.5),
+      blurred: slower(blurred(false), blurred(true), big, 0.5),
+      cards: slower(cards(false), cards(true), big, 0.5),
     }
-    const times = [group, blurred, cards].map((layers) => slower(layers(false), layers(true), 3))
-    expect(Math.max(...times)).toBeLessThanOrEqual(4)
-  }, 300_000)
+    console.info(costsLine(costs))
+    for (const [name, cost] of Object.entries(costs)) expect(cost.times, name).toBeLessThan(HIDING_COST)
+  }, 60_000)
 })

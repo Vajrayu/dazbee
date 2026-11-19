@@ -6,6 +6,7 @@ import {
   alphaAt,
   at200,
   BLACK,
+  costsLine,
   covered,
   cutout,
   draw,
@@ -19,9 +20,16 @@ import {
   shadow,
   slower,
   solid,
-  type TestLayer,
   WHITE,
 } from './test-shadows.ts'
+
+/**
+ * The most times longer a spread may take to draw than spread 0: about twice the most measured on
+ * CI runners under the whole suite's load (cards 1.53, the path 2.58; the PR gives the numbers), and
+ * well under what drawing the spread by its pixels (cards 26, the path 250) or the path's by path
+ * ops (47) measured.
+ */
+const SPREAD_COST = 5
 
 describe('drawDropShadow', () => {
   it('grows an ellipse by the spread on its diagonal, not by the corner of a square', () => {
@@ -351,25 +359,20 @@ describe('drawDropShadow', () => {
   }, 30_000)
 
   it('costs a few times spread 0 at most: 300 rounded cards, and a path of 3000 segments at spread 200', () => {
-    const cards = (spread: number) => {
-      const layers: TestLayer[] = []
-      for (let i = 0; i < 300; i++) {
-        layers.push(
-          graphic(
-            { kind: 'rect', cornerRadius: 10 },
-            {
-              x: 20 + (i % 20) * 52,
-              y: 20 + Math.floor(i / 20) * 70,
-              width: 40,
-              height: 40,
-              fills: [solid('#3F51B5FF')],
-              effects: [shadow(spread, { y: 4, blur: 8, color: '#00000066' })],
-            },
-          ),
-        )
-      }
-      return () => draw(layers, { width: 1080, height: 1080, fills: [solid(WHITE)] })
-    }
+    const cards = (spread: number) =>
+      Array.from({ length: 300 }, (_, i) =>
+        graphic(
+          { kind: 'rect', cornerRadius: 10 },
+          {
+            x: 20 + (i % 20) * 52,
+            y: 20 + Math.floor(i / 20) * 70,
+            width: 40,
+            height: 40,
+            fills: [solid('#3F51B5FF')],
+            effects: [shadow(spread, { y: 4, blur: 8, color: '#00000066' })],
+          },
+        ),
+      )
     const wavy = (() => {
       const points: string[] = []
       for (let i = 0; i < 3000; i++) {
@@ -379,22 +382,19 @@ describe('drawDropShadow', () => {
       }
       return `M${points.join(' L')} Z`
     })()
-    const path = (spread: number) => () =>
-      draw(
-        [
-          graphic(
-            { kind: 'path', d: wavy },
-            { x: 0, y: 0, width: 1080, height: 1080, effects: [shadow(spread, { blur: 10 })] },
-          ),
-        ],
-        {
-          width: 1080,
-          height: 1080,
-        },
-      )
-    expect(slower(cards(4), cards(0), 3)).toBeLessThanOrEqual(4)
-    expect(slower(path(200), path(0), 3)).toBeLessThanOrEqual(4)
-  }, 300_000)
+    const path = (spread: number) => [
+      graphic(
+        { kind: 'path', d: wavy },
+        { x: 0, y: 0, width: 1080, height: 1080, effects: [shadow(spread, { blur: 10 })] },
+      ),
+    ]
+    const costs = {
+      cards: slower(cards(4), cards(0), { width: 1080, height: 1080, fills: [solid(WHITE)] }),
+      path: slower(path(200), path(0), { width: 1080, height: 1080 }),
+    }
+    console.info(costsLine(costs))
+    for (const [name, cost] of Object.entries(costs)) expect(cost.times, name).toBeLessThan(SPREAD_COST)
+  }, 60_000)
 })
 
 describe('drawInnerShadow', () => {

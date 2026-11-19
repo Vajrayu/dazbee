@@ -6,6 +6,7 @@ import type { Change, DesignRecords, Member, RestoreMark, ServerMessage, Target 
 
 import { sameValue } from '../same-value.ts'
 import { linkedDesign, testDesign } from '../test-design.ts'
+import { holdOf } from '../test-holds.ts'
 import type { RecordKey } from './changes.ts'
 import { type Client, openClient, type SavedClient, SyncBroken } from './client.ts'
 import { firstSaved } from './journal.ts'
@@ -245,11 +246,10 @@ describe('openClient', () => {
       const [a, b] = [joinClient(server), joinClient(server)]
       for (let n = 1; n <= 1000; n++) edit(a, 'move', set(prop('box', 'x'), n))
       const out = up(server, b, edit(b, 'rename', set(name('layer', 'headline'), 'Theirs')))
-      const started = performance.now()
-      down(a, out)
+      const ms = holdOf(() => down(a, out))
       expect(a.working().get('layer', 'headline')?.name).toBe('Theirs')
       expect(a.working().get('layer', 'box')).toMatchObject({ props: { x: 1000 } })
-      expect(performance.now() - started).toBeLessThan(1000)
+      expect(ms).toBeLessThan(1000)
     })
 
     it('tells its listeners which records others’ change sets changed', () => {
