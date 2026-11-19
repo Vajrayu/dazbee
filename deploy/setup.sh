@@ -15,7 +15,9 @@
 #     dazbee-firewall service puts the rules back before Docker starts, so a reboot keeps them.
 #     Docker forwards IPv6 to the published ports through its proxy, which ufw's INPUT rules close;
 #   - 2 GB of swap in /swapfile;
-#   - the system nginx stopped and disabled, so Caddy can take port 80.
+#   - the system nginx stopped and disabled, so Caddy can take port 80;
+#   - the dazbee-backup timer, which runs deploy/backup.sh each night, from dazbee-backup.service and
+#     .timer beside this script, so run it from /opt/dazbee/deploy, where each deploy copies them.
 #
 # Then, by hand, once per server:
 #   - /opt/dazbee/.env from deploy/env.example, owned root:deploy, mode 640;
@@ -40,6 +42,7 @@ readonly SWAP_FILE=/swapfile
 readonly SWAP_SIZE=2G
 readonly SELF=/usr/local/sbin/dazbee-setup
 readonly UNIT=/etc/systemd/system/dazbee-firewall.service
+readonly BACKUP_UNITS=(dazbee-backup.service dazbee-backup.timer)
 
 log() { printf '%s\n' "$*"; }
 
@@ -189,6 +192,23 @@ setup_swap() {
   log "swap: $(swapon --show=SIZE --noheadings "$SWAP_FILE" | tr -d ' ') in $SWAP_FILE"
 }
 
+# Installs the backup's service and timer from beside this script, and starts the timer.
+setup_backups() {
+  local here unit
+  here=$(dirname "$(realpath "${BASH_SOURCE[0]}")")
+  for unit in "${BACKUP_UNITS[@]}"; do
+    [ -f "$here/$unit" ] || {
+      echo "no $unit beside setup.sh: run it from $DAZBEE_DIR/deploy" >&2
+      return 1
+    }
+    install -m 644 "$here/$unit" "/etc/systemd/system/$unit"
+  done
+  systemctl daemon-reload
+  systemctl --quiet enable dazbee-backup.timer
+  systemctl restart dazbee-backup.timer
+  log "backups: dazbee-backup.timer runs backup.sh next at $(systemctl show -P NextElapseUSecRealtime dazbee-backup.timer)"
+}
+
 stop_nginx() {
   if systemctl cat nginx.service > /dev/null 2>&1; then
     systemctl --quiet disable --now nginx.service
@@ -210,6 +230,7 @@ case ${1:-} in
     setup_firewall
     setup_swap
     stop_nginx
+    setup_backups
     ;;
   *)
     echo 'usage: setup.sh [firewall]' >&2

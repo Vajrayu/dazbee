@@ -1,0 +1,14 @@
+# Backs up the production database to the backups bucket with deploy/backup.sh, as the deploy user.
+# deploy/setup.sh installs it; dazbee-backup.timer starts it each night.
+[Unit]
+Description=Dazbee: back up the database to the backups bucket
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=deploy
+Group=deploy
+ExecStart=/bin/bash /opt/dazbee/deploy/backup.sh
+TimeoutStartSec=3h
