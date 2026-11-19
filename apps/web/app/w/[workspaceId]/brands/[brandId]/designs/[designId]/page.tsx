@@ -43,7 +43,7 @@ export default async function EditPage({
       brandName={found.brand.name}
       everyBrand={brandWords(t).all}
       forEveryBrand={canChangeTemplate(role, limited, 'workspace')}
-      syncUrl={process.env.NEXT_PUBLIC_SYNC_URL ?? 'ws://localhost:1234'}
+      syncUrl={process.env.SYNC_URL ?? 'ws://localhost:1234'}
       account={
         <AccountMenu
           workspaceId={workspaceId}

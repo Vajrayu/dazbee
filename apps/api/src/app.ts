@@ -36,6 +36,7 @@ export function createApp({
   storage,
   sessionOf,
   syncSecret,
+  build,
   signIn = null,
   invites = { workos: null, dev: null },
 }: {
@@ -43,13 +44,15 @@ export function createApp({
   storage: Storage
   sessionOf: SessionOf
   syncSecret: string
+  /** The commit this build is of, which /health names. */
+  build: string
   signIn?: SignInSettings | null
   /** Who sends invites: WorkOS for a workspace with an organization, the development stand-in for one without. */
   invites?: { workos: InvitesProvider | null; dev: DevInvitesSettings | null }
 }) {
   const app = new Hono<Env>()
 
-  app.get('/health', (c) => c.json({ ok: true }))
+  app.get('/health', (c) => c.json({ ok: true, build }))
 
   const providers: InvitesProviders = { workos: invites.workos, dev: invites.dev?.provider ?? null }
   app.route('/', signInRoutes({ db, signIn, invites: providers }))

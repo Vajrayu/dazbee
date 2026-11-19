@@ -103,6 +103,14 @@ function callRoute(as: string, route: string) {
   return request(as, method, filled, method === 'GET' || method === 'HEAD' ? undefined : {})
 }
 
+describe('health', () => {
+  it('answers that the API is up, and which build it runs', async () => {
+    const answer = await app.request('/health')
+    expect(answer.status).toBe(200)
+    expect(await answer.json()).toEqual({ ok: true, build: 'test-build' })
+  })
+})
+
 describe('roles', () => {
   it('has no handler for every method, only the session and brand checks, so the sweeps reach every handler', () => {
     expect(app.routes.filter((r) => r.method === 'ALL').map((r) => r.path)).toEqual(MIDDLEWARE_PATHS)

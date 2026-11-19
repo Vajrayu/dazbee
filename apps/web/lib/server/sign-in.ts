@@ -4,7 +4,7 @@
 import 'server-only'
 
 import { cookies } from 'next/headers'
-import { type NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 
 import { SESSION_COOKIE, signOutLink } from './api.ts'
 
@@ -24,9 +24,15 @@ export const cookieOptions = (origin: string | null | undefined) => ({
   secure: origin?.startsWith('https:') ?? false,
 })
 
+/**
+ * A 303 to `to`: a path on this site, which stays relative so the browser keeps the address it used
+ * (behind a proxy the server's own address is not the site's), or another site's address.
+ */
+export const seeOther = (to: string) => new NextResponse(null, { status: 303, headers: { location: to } })
+
 /** Forgets the session token, ends the WorkOS session too when there was one, and sends the person to it or to sign in. */
-export async function endSession(request: NextRequest) {
-  return NextResponse.redirect(new URL(await forgetSession(), request.url), 303)
+export async function endSession() {
+  return seeOther(await forgetSession())
 }
 
 /**

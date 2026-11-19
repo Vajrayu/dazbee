@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
+  tests:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -23,9 +23,6 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-        # The repository is private: CanvasKit's release files come through the API with this token.
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
       # hb-shape, the reference the shaping checks (#7) compare Skia's glyphs against.
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libharfbuzz-bin
       - run: pnpm lint
@@ -43,3 +40,135 @@ jobs:
           path: tests/pixels/output
           if-no-files-found: ignore
           retention-days: 7
+
+  # The production images: built, run with deploy/compose.yml behind Caddy with a test .env and a
+  # self-signed certificate, and checked. On main they are pushed to GitHub's container registry.
+  images:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REGISTRY: ghcr.io/dazbee-ai
+      PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          file: apps/web/Dockerfile
+          build-args: BUILD_ID=${{ github.sha }}
+          tags: ${{ env.REGISTRY }}/dazbee-web:${{ github.sha }}
+          load: true
+          provenance: false
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
+      - uses: docker/build-push-action@v7
+        with:
+          file: apps/api/Dockerfile
+          build-args: BUILD_ID=${{ github.sha }}
+          tags: ${{ env.REGISTRY }}/dazbee-api:${{ github.sha }}
+          load: true
+          provenance: false
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+      - uses: docker/build-push-action@v7
+        with:
+          file: apps/sync/Dockerfile
+          build-args: BUILD_ID=${{ github.sha }}
+          tags: ${{ env.REGISTRY }}/dazbee-sync:${{ github.sha }}
+          load: true
+          provenance: false
+          cache-from: type=gha,scope=sync
+          cache-to: type=gha,scope=sync,mode=max
+      # The folder compose runs in, laid out as /opt/dazbee is on the server.
+      - name: Start the stack
+        run: |
+          stack="$RUNNER_TEMP/stack"
+          mkdir -p "$stack/live" "$stack/certs"
+          cp -r deploy "$stack/deploy"
+          cp deploy/upstreams.caddy "$stack/live/upstreams.caddy"
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=app.dazbee.com             -addext subjectAltName=DNS:app.dazbee.com,DNS:sync.dazbee.com             -keyout "$stack/certs/origin.key" -out "$stack/certs/origin.pem"
+          chmod 644 "$stack/certs/origin.key"
+          {
+            echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)"
+            echo "SYNC_TOKEN_SECRET=$(openssl rand -hex 32)"
+            echo "SESSION_SECRET=$(openssl rand -hex 32)"
+            echo "STORAGE_ENDPOINT=http://storage.invalid"
+            echo "STORAGE_BUCKET=dazbee"
+            echo "STORAGE_ACCESS_KEY_ID=test"
+            echo "STORAGE_SECRET_ACCESS_KEY=test"
+            for name in WEB_BLUE_TAG WEB_GREEN_TAG API_BLUE_TAG API_GREEN_TAG SYNC_TAG; do echo "$name=$GITHUB_SHA"; done
+          } > "$stack/.env"
+          cd "$stack"
+          docker compose -f deploy/compose.yml --project-directory . up -d --wait
+          # Green after blue, so the two APIs never migrate a new database at once.
+          docker compose -f deploy/compose.yml --project-directory . --profile green up -d --wait
+      - name: Check the stack
+        working-directory: ${{ runner.temp }}/stack
+        run: |
+          compose() { docker compose -f deploy/compose.yml --project-directory . --profile green "$@"; }
+          https() { curl -sS --resolve app.dazbee.com:443:127.0.0.1 --resolve sync.dazbee.com:443:127.0.0.1 --cacert certs/origin.pem "$@"; }
+          for service in web-blue web-green api-blue api-green sync postgres; do
+            read -r health ports < <(docker inspect -f '{{.State.Health.Status}} {{len .HostConfig.PortBindings}}' "$(compose ps -q "$service")")
+            echo "$service: $health, $ports published ports"
+            [ "$health" = healthy ]
+            [ "$ports" = 0 ]
+          done
+          page=$(https -f https://app.dazbee.com/login)
+          grep -q "data-build=\"$GITHUB_SHA\"" <<< "$page"
+          echo "/login renders through Caddy, on build $GITHUB_SHA"
+          [ "$(https -o /dev/null -w '%{http_code} %{redirect_url}' https://app.dazbee.com/)" = "303 https://app.dazbee.com/login" ]
+          echo "/ without a session is sent to /login"
+          https -f -o /dev/null https://sync.dazbee.com/
+          echo "the sync server answers through Caddy"
+          for api in caddy:8080 api-blue:8787 api-green:8787; do
+            health=$(compose exec -T caddy wget -qO- "http://$api/health")
+            grep -q "\"build\":\"$GITHUB_SHA\"" <<< "$health"
+            echo "$api/health names build $GITHUB_SHA"
+          done
+      - if: failure()
+        working-directory: ${{ runner.temp }}/stack
+        run: docker compose -f deploy/compose.yml --project-directory . --profile green logs --no-color --tail 200
+      - if: env.PUSH == 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - if: env.PUSH == 'true'
+        name: Push the images
+        run: |
+          for app in web api sync; do
+            docker tag "$REGISTRY/dazbee-$app:$GITHUB_SHA" "$REGISTRY/dazbee-$app:latest"
+            docker push "$REGISTRY/dazbee-$app:$GITHUB_SHA"
+            docker push "$REGISTRY/dazbee-$app:latest"
+          done
+      # The registry keeps each app's last 10 versions.
+      - if: env.PUSH == 'true'
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: dazbee-web
+          package-type: container
+          min-versions-to-keep: 10
+      - if: env.PUSH == 'true'
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: dazbee-api
+          package-type: container
+          min-versions-to-keep: 10
+      - if: env.PUSH == 'true'
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: dazbee-sync
+          package-type: container
+          min-versions-to-keep: 10
+
+  # The one check a pull request needs: the tests and the images both passed.
+  check:
+    needs: [tests, images]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - run: '[ "${{ needs.tests.result }}" = success ] && [ "${{ needs.images.result }}" = success ]'

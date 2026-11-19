@@ -1,5 +1,4 @@
 // The `/` route handler, run in Node with the request's cookies held in a map and the API stubbed.
-import { NextRequest } from 'next/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { findMe, SESSION_COOKIE, signOutLink } from '@/lib/server/api.ts'
@@ -42,9 +41,9 @@ describe('GET /', () => {
   it('opens the workspace the API says to open', async () => {
     vi.mocked(findMe).mockResolvedValue(me('workspace-1'))
 
-    const response = await GET(new NextRequest('http://localhost:3000/'))
+    const response = await GET()
 
-    expect(response.headers.get('location')).toBe('http://localhost:3000/w/workspace-1')
+    expect(response.headers.get('location')).toBe('/w/workspace-1')
     expect(jar.get(SESSION_COOKIE)).toBe('a-session-token')
     expect(signOutLink).not.toHaveBeenCalled()
   })
@@ -53,19 +52,19 @@ describe('GET /', () => {
     vi.mocked(findMe).mockResolvedValue(me(null))
     vi.mocked(signOutLink).mockResolvedValue('https://auth.example.com/logout')
 
-    const response = await GET(new NextRequest('http://localhost:3000/'))
+    const response = await GET()
 
     expect(response.headers.get('location')).toBe('https://auth.example.com/logout')
     expect(jar.has(SESSION_COOKIE)).toBe(false)
   })
 
-  it('sends a person who is not signed in to sign in', async () => {
+  it('sends a person who is not signed in to sign in, on the address the browser used, which a proxy hides from the server', async () => {
     jar.clear()
     vi.mocked(findMe).mockResolvedValue(null)
 
-    const response = await GET(new NextRequest('http://localhost:3000/'))
+    const response = await GET()
 
-    expect(response.headers.get('location')).toBe('http://localhost:3000/login')
+    expect(response.headers.get('location')).toBe('/login')
     expect(signOutLink).not.toHaveBeenCalled()
   })
 })

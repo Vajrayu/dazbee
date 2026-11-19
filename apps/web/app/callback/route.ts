@@ -3,11 +3,11 @@
 // open the workspace sign-in chose. A sign-in that started from an invite and fails goes back to sign
 // in with the invite's token, so trying again still accepts it.
 import { cookies } from 'next/headers'
-import { type NextRequest, NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 
 import { workspacePath } from '@/lib/brand-routes.ts'
 import { completeSignIn } from '@/lib/server/api.ts'
-import { cookieOptions, INVITATION_COOKIE, SESSION_COOKIE, STATE_COOKIE } from '@/lib/server/sign-in.ts'
+import { cookieOptions, INVITATION_COOKIE, seeOther, SESSION_COOKIE, STATE_COOKIE } from '@/lib/server/sign-in.ts'
 
 export async function GET(request: NextRequest) {
   const jar = await cookies()
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
   jar.delete(STATE_COOKIE)
   jar.delete(INVITATION_COOKIE)
   const again = new URLSearchParams({ error: '1', ...(invitationToken ? { invitation_token: invitationToken } : {}) })
-  const failed = () => NextResponse.redirect(new URL(`/login?${again}`, request.url), 303)
+  const failed = () => seeOther(`/login?${again}`)
   if (!code || !state || !expected || state !== expected) return failed()
   let session
   try {
@@ -30,5 +30,5 @@ export async function GET(request: NextRequest) {
     ...cookieOptions(request.nextUrl.origin),
     expires: new Date(session.expiresAt),
   })
-  return NextResponse.redirect(new URL(workspacePath(session.open), request.url), 303)
+  return seeOther(workspacePath(session.open))
 }

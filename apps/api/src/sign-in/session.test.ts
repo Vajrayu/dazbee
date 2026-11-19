@@ -30,7 +30,7 @@ describe('session tokens', () => {
 })
 
 describe('seedDevelopment', () => {
-  const app = createApp({ db, storage, sessionOf: devSession, syncSecret })
+  const app = createApp({ db, storage, sessionOf: devSession, syncSecret, build: 'test-build' })
   const ask = async (method: string, path: string, body?: unknown) => {
     const response = await app.request(path, {
       method,

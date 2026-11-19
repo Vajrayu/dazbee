@@ -93,6 +93,7 @@ export const app = createApp({
   storage,
   sessionOf: tokenSession(sessionSecret),
   syncSecret,
+  build: 'test-build',
   signIn: { provider: workos.provider, secret: sessionSecret },
   invites: { workos: workos.invites, dev: null },
 })

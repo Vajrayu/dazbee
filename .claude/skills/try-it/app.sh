@@ -122,7 +122,7 @@ start() {
     SYNC_PORT="$sync_port" SYNC_TOKEN_SECRET=local-only-sync-token-secret-0000 \
     node --max-old-space-size=768 src/main.ts > "$out/sync.log" 2>&1 &)
   wait_for "http://localhost:$sync_port" "$out/sync.log"
-  (cd "$tree" && env API_URL="http://localhost:$api_port" NEXT_PUBLIC_SYNC_URL="ws://localhost:$sync_port" \
+  (cd "$tree" && env API_URL="http://localhost:$api_port" SYNC_URL="ws://localhost:$sync_port" \
     pnpm --filter @dazbee/web dev --port "$web_port" > "$out/web.log" 2>&1 &)
   wait_for "http://localhost:$web_port" "$out/web.log"
 

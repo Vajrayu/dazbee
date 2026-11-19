@@ -26,6 +26,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       lang={locale}
       dir={dirOf(locale)}
       className={fontVariables}
+      // The commit the image was built from, which says which build a tab is on; `dev` from a checkout.
+      data-build={process.env.BUILD_ID || 'dev'}
       {...(pick === 'system' ? {} : { 'data-theme': pick })}
       suppressHydrationWarning
     >
