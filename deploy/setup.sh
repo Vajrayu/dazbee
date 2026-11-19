@@ -113,7 +113,8 @@ setup_user() {
 
 setup_ufw() {
   local port
-  port=$(sshd -T 2> /dev/null | awk '$1 == "port" { print $2; exit }')
+  # sshd's port, or 22 when sshd can't say.
+  port=$(sshd -T 2> /dev/null | awk '$1 == "port" { print $2; exit }') || port=
   port=${port:-22}
   ufw default deny incoming > /dev/null
   ufw default allow outgoing > /dev/null
