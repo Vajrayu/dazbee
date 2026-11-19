@@ -1,3 +1,4 @@
+export * from './admin.ts'
 export * from './api.ts'
 export * from './clipboard.ts'
 export {

@@ -12,7 +12,7 @@ export function fakeWorkos(people: Record<string, SignedInPerson> = {}) {
   const made = {
     organizations: [] as { id: string; name: string; workspaceId: string }[],
     members: [] as { organizationId: string; userId: string }[],
-    invitations: [] as { id: string; email: string; organizationId: string | null; inviterUserId: string }[],
+    invitations: [] as { id: string; email: string; organizationId: string | null; inviterUserId: string | null }[],
     removed: [] as { organizationId: string; userId: string }[],
     endedSessions: [] as string[],
   }

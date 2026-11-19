@@ -1,22 +1,25 @@
 // Sign-in with WorkOS AuthKit (#58). The API alone holds the WorkOS key: it gives the web app the
 // sign-in link, swaps the code WorkOS sends back for the person, and makes their session. During early
 // access only those it allows get in. Each sign-in accepts the person's invites that their provider says
-// they accepted; one that leaves them in no workspace makes a workspace (one WorkOS organization) with the
-// person as its Owner (ADR-0011).
+// they accepted, a workspace's and a Dazbee invite alike; one that leaves them in no workspace makes a
+// workspace (one WorkOS organization) with the person as its Owner (ADR-0011).
 import { WorkOS } from '@workos-inc/node'
 
 import { type Db, memberships, newId, type Tx, users, workspaces } from '@dazbee/db'
 import type { SignedIn } from '@dazbee/schema'
 
+import type { Admins } from '../admin/admins.ts'
+import { acceptDazbeeInvite, pendingDazbeeInvites, type WaitingDazbeeInvite } from '../admin/dazbee-invites.ts'
 import { acceptInvite, type WaitingInvite, waitingInvites } from '../members/invites.ts'
 import {
+  dazbeeInvitesProvider,
   type InvitesProvider,
   invitesProviderFor,
   type InvitesProviders,
   type ProviderInvite,
 } from '../members/invites-provider.ts'
 import { workspaceToOpen } from '../workspace/workspace.ts'
-import { type AllowList, earlyAccessRefusal, EarlyAccessRefused } from './early-access.ts'
+import { type AllowList, type EarlyAccess, earlyAccessRefusal, EarlyAccessRefused } from './early-access.ts'
 import { signSessionToken } from './session.ts'
 
 /** A person WorkOS signed in. */
@@ -29,8 +32,11 @@ export interface SignedInPerson {
 
 /** What the API needs from WorkOS; tests give it a stand-in that never calls out. */
 export interface SignInProvider {
-  /** The sign-in page's link, carrying an invite's token when the person came from one. */
-  signInUrl(state: string, invitationToken?: string): string
+  /**
+   * The sign-in page's link, carrying an invite's token when the person came from one, and sending them back
+   * to `redirectUri` when given, else to the web app's /callback.
+   */
+  signInUrl(state: string, invitationToken?: string, redirectUri?: string): string
   /** The person a code from the sign-in page is for; throws when the code is not good. */
   authenticate(code: string): Promise<SignedInPerson>
   /** A new organization for a workspace, returning its WorkOS id. */
@@ -50,8 +56,10 @@ export interface Accepting {
 
 /** The person's pending invites as their providers hold them, read before anything is written. */
 export interface HeldInvites {
-  /** The pending invites their provider says this person accepted, oldest first. */
+  /** The pending workspace invites their provider says this person accepted, oldest first. */
   accepted: WaitingInvite[]
+  /** The pending Dazbee invites their provider says this person accepted. */
+  dazbee: WaitingDazbeeInvite[]
   /** Whether the person's email has an invite its provider still holds as pending. */
   waiting: boolean
   /** Whether an invite's provider couldn't be read now, which leaves that invite for a later sign-in. */
@@ -60,12 +68,13 @@ export interface HeldInvites {
 
 /**
  * Sign-in with WorkOS, when it is set up: the provider, the secret session tokens are signed with, and
- * early access's allow-list (none lets anyone sign up).
+ * early access's allow-list and admins (with neither, anyone may sign up).
  */
 export interface SignInSettings {
   provider: SignInProvider
   secret: string
   allowed?: AllowList
+  admins?: Admins
 }
 
 export interface WorkosSettings {
@@ -106,11 +115,11 @@ export function accessTokenSessionId(accessToken: string): string | null {
 export function workosProvider({ apiKey, clientId, redirectUri }: WorkosSettings): SignInProvider {
   const workos = new WorkOS(apiKey, { clientId })
   return {
-    signInUrl: (state, invitationToken) =>
+    signInUrl: (state, invitationToken, site = redirectUri) =>
       workos.userManagement.getAuthorizationUrl({
         provider: 'authkit',
         clientId,
-        redirectUri,
+        redirectUri: site,
         state,
         ...(invitationToken ? { invitationToken } : {}),
       }),
@@ -147,13 +156,14 @@ export function workosProvider({ apiKey, clientId, redirectUri }: WorkosSettings
  */
 export async function completeSignIn(
   db: Db,
-  { provider, secret, allowed = null }: SignInSettings,
+  { provider, secret, allowed = null, admins = new Set() }: SignInSettings,
   invites: InvitesProviders,
   person: SignedInPerson,
 ): Promise<SignedIn> {
+  const access: EarlyAccess = { allowed, admins }
   const held = await readInvites(db, invites, { email: person.user.email, workosUserId: person.user.id })
-  const refusal = await earlyAccessRefusal(db, allowed, person, {
-    accepting: held.accepted.length > 0,
+  const refusal = await earlyAccessRefusal(db, access, person, {
+    accepting: held.accepted.length > 0 || held.dazbee.length > 0,
     waiting: held.waiting,
   })
   // An unread invite may be one they accepted: refusing them would be wrong.
@@ -167,13 +177,15 @@ export async function completeSignIn(
       .onConflictDoUpdate({ target: users.workosUserId, set: { email: person.user.email, name: person.user.name } })
       .returning({ id: users.id })
     if (!user) throw new Error('The user was not recorded')
+    let joined = false
+    for (const invite of held.dazbee) joined = (await acceptDazbeeInvite(tx, invite.id)) || joined
     const open = (await acceptHeld(tx, held, user.id)) ?? (await workspaceToOpen(tx, user.id))
     // An unread invite may be one they accepted: making them a workspace of their own would be wrong.
     if (!open && held.unread) throw new SignInUnfinished("Sign-in couldn't finish; try again")
-    // A person about to get a workspace of their own is asked again, with no invite or membership left to
-    // let them in; a refusal undoes their record.
+    // A person about to get a workspace of their own is asked again, with no workspace invite or membership
+    // left to let them in, and a Dazbee invite only if it was accepted here; a refusal undoes their record.
     if (!open) {
-      const again = await earlyAccessRefusal(tx, allowed, person, { accepting: false, waiting: held.waiting })
+      const again = await earlyAccessRefusal(tx, access, person, { accepting: joined, waiting: held.waiting })
       if (again) throw new EarlyAccessRefused(again)
     }
     return { userId: user.id, found: open }
@@ -212,22 +224,31 @@ export async function acceptInvites(
   return { open: await acceptHeld(db, held, person.id), unread: held.unread }
 }
 
-/** The pending invites of the person's email, each read from its provider; writes nothing. */
+/**
+ * The pending invites of the person's email, a workspace's and Dazbee invites, each read from its provider;
+ * writes nothing.
+ */
 async function readInvites(
   db: Db | Tx,
   invites: InvitesProviders,
   person: { email: string; workosUserId: string },
 ): Promise<HeldInvites> {
-  const waiting = await waitingInvites(db, person.email)
-  const read = await Promise.all(
-    waiting.map((invite) => readInvite(invitesProviderFor(invites, invite.organizationId), invite.providerInviteId)),
-  )
-  const accepted = waiting.filter((_, i) => {
+  const [waiting, dazbee] = await Promise.all([
+    waitingInvites(db, person.email),
+    pendingDazbeeInvites(db, person.email),
+  ])
+  const dazbeeProvider = dazbeeInvitesProvider(invites)
+  const read = await Promise.all([
+    ...waiting.map((invite) => readInvite(invitesProviderFor(invites, invite.organizationId), invite.providerInviteId)),
+    ...dazbee.map((invite) => readInvite(dazbeeProvider, invite.providerInviteId)),
+  ])
+  const acceptedHere = (i: number) => {
     const held = read[i]
     return held?.state === 'accepted' && held.acceptedUserId === person.workosUserId
-  })
+  }
   return {
-    accepted,
+    accepted: waiting.filter((_, i) => acceptedHere(i)),
+    dazbee: dazbee.filter((_, i) => acceptedHere(waiting.length + i)),
     waiting: read.some((held) => held?.state === 'pending'),
     unread: read.includes(null),
   }

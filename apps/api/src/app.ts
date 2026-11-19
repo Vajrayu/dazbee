@@ -1,7 +1,9 @@
 // The API: every area's routes on one app. Each workspace is at /workspaces/:workspaceId, for its members
 // only: a workspace the person is not a member of, a brand or design of another workspace, and a brand outside
 // a limited member's, are answered as if they didn't exist (ADR-0016). Outside a workspace there are only
-// /health, sign-in's /auth/* (with the development invites' accept route) and the person's own /me. Every
+// /health, sign-in's /auth/* (with the development invites' accept route), the person's own /me, early
+// access's /admin/*, for admins only, and its public request to join, /access-requests. A person whose
+// access an admin removed is answered 401 on every route that needs a session. Every
 // route below a brand reads its brand from `brandScope`, and an `Invalid*` error answers 400 here, and a
 // `MemberRefusal` its own status, whichever route throws it.
 import { Hono } from 'hono'
@@ -9,6 +11,9 @@ import { Hono } from 'hono'
 import type { Db } from '@dazbee/db'
 import type { Storage } from '@dazbee/storage'
 
+import type { Admins } from './admin/admins.ts'
+import { accessRequestRoutes, adminRoutes } from './admin/routes.ts'
+import { type RequestLimit, requestLimit } from './admin/waiting-list.ts'
 import { InvalidUpload } from './assets/assets.ts'
 import { assetRoutes } from './assets/routes.ts'
 import { InvalidKit } from './brand-kits/brand-kits.ts'
@@ -23,6 +28,7 @@ import type { InvitesProvider, InvitesProviders } from './members/invites-provid
 import { MemberRefusal } from './members/members.ts'
 import { memberRoutes } from './members/routes.ts'
 import { devInviteRoutes, type DevInvitesSettings } from './sign-in/dev-invites.ts'
+import { removedRefusal } from './sign-in/early-access.ts'
 import { signInRoutes } from './sign-in/routes.ts'
 import type { SessionOf } from './sign-in/session.ts'
 import type { SignInSettings } from './sign-in/sign-in.ts'
@@ -39,6 +45,8 @@ export function createApp({
   build,
   signIn = null,
   invites = { workos: null, dev: null },
+  admins = new Set(),
+  requests = requestLimit(),
 }: {
   db: Db
   storage: Storage
@@ -49,6 +57,10 @@ export function createApp({
   signIn?: SignInSettings | null
   /** Who sends invites: WorkOS for a workspace with an organization, the development stand-in for one without. */
   invites?: { workos: InvitesProvider | null; dev: DevInvitesSettings | null }
+  /** Early access's admins, who alone use /admin. */
+  admins?: Admins
+  /** The limit on requests to join from one address. */
+  requests?: RequestLimit
 }) {
   const app = new Hono<Env>()
 
@@ -56,9 +68,12 @@ export function createApp({
 
   const providers: InvitesProviders = { workos: invites.workos, dev: invites.dev?.provider ?? null }
   app.route('/', signInRoutes({ db, signIn, invites: providers }))
-  app.route('/', devInviteRoutes({ db, dev: invites.dev }))
+  // The stand-in accepts Dazbee invites only when it sends them, which it does without WorkOS.
+  app.route('/', devInviteRoutes({ db, dev: invites.dev && { ...invites.dev, dazbee: !invites.workos } }))
+  app.route('/', adminRoutes({ db, sessionOf, admins, invites: providers }))
+  app.route('/', accessRequestRoutes({ db, limit: requests }))
 
-  const signedIn = requireSession(sessionOf)
+  const signedIn = requireSession(sessionOf, removedRefusal(db, admins))
   const records = new Hono<Env>()
     .route('/', brandRoutes({ db, storage, syncSecret }))
     .route('/', versionRoutes({ db, storage }))

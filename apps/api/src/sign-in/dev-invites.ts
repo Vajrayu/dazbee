@@ -1,15 +1,19 @@
 // The development stand-in for invites, for a workspace with no WorkOS organization, such as the
-// development workspace; given only when the development session is on. It keeps its invites in our table
-// alone, and its link is the web app's /dev/accept, whose accept route signs in the person with the
-// invite's email, made up on first use, and accepts the invite as WorkOS would.
+// development workspace, and for Dazbee invites when WorkOS sign-in isn't set up; given only when the
+// development session is on. It keeps its invites in our tables alone, and its link is the web app's
+// /dev/accept, whose accept route signs in the person with the invite's email, made up on first use, and
+// accepts the invite as WorkOS would: a Dazbee invite's person gets a workspace of their own when they have
+// none, with no WorkOS organization.
 import { and, eq, isNull } from 'drizzle-orm'
 import { Hono } from 'hono'
 
-import { type Db, invites, newId, users, workspaces } from '@dazbee/db'
+import { dazbeeInvites, type Db, invites, memberships, newId, type Tx, users, workspaces } from '@dazbee/db'
 import { AcceptDevInvite, type SignedIn } from '@dazbee/schema'
 
+import { acceptDazbeeInvite } from '../admin/dazbee-invites.ts'
 import { body, type Env, error } from '../http.ts'
 import { inviteExpiry, type InvitesProvider, type ProviderInvite } from '../members/invites-provider.ts'
+import { workspaceToOpen } from '../workspace/workspace.ts'
 import { signSessionToken } from './session.ts'
 import { acceptInvites } from './sign-in.ts'
 
@@ -21,10 +25,14 @@ export interface DevInvites extends InvitesProvider {
   forget(id: string): void
 }
 
-/** The stand-in, with the secret its accept route signs sessions with. */
+/**
+ * The stand-in, with the secret its accept route signs sessions with, and whether it also sends Dazbee
+ * invites, which it does when WorkOS sign-in isn't set up.
+ */
 export interface DevInvitesSettings {
   provider: DevInvites
   secret: string
+  dazbee?: boolean
 }
 
 /** Accepting through the stand-in made no membership; the transaction that made its person rolls back. */
@@ -42,6 +50,16 @@ export function devInvites(db: Db, webUrl: string): DevInvites {
       .select({ expiresAt: invites.expiresAt, acceptedAt: invites.acceptedAt, revokedAt: invites.revokedAt })
       .from(invites)
       .where(eq(invites.providerInviteId, id))
+      .unionAll(
+        db
+          .select({
+            expiresAt: dazbeeInvites.expiresAt,
+            acceptedAt: dazbeeInvites.acceptedAt,
+            revokedAt: dazbeeInvites.revokedAt,
+          })
+          .from(dazbeeInvites)
+          .where(eq(dazbeeInvites.providerInviteId, id)),
+      )
     if (!row) throw new Error(`No development invite ${id}`)
     const acceptedUserId = acceptedBy.get(id) ?? null
     const state = row.revokedAt
@@ -86,10 +104,11 @@ export function devInvites(db: Db, webUrl: string): DevInvites {
 }
 
 /**
- * `POST /auth/dev/accept`: accepts a pending stand-in invite by the id its link names, as the development
- * person of its email, with the WorkOS user id `dev:<email>`, even when a WorkOS account has the email. That
- * person is made, when there is none, in the transaction that accepts, so a failed accept leaves no one
- * behind. Then answers as `/auth/callback` does. Not found unless the stand-in is given.
+ * `POST /auth/dev/accept`: accepts a pending stand-in invite by the id its link names, a workspace's or a
+ * Dazbee invite, as the development person of its email, with the WorkOS user id `dev:<email>`, even when a
+ * WorkOS account has the email. That person is made, when there is none, in the transaction that accepts,
+ * so a failed accept leaves no one behind. Then answers as `/auth/callback` does. Not found unless the
+ * stand-in is given.
  */
 export function devInviteRoutes({ db, dev }: { db: Db; dev: DevInvitesSettings | null }): Hono<Env> {
   const app = new Hono<Env>()
@@ -103,11 +122,18 @@ export function devInviteRoutes({ db, dev }: { db: Db; dev: DevInvitesSettings |
       .from(invites)
       .innerJoin(workspaces, eq(workspaces.id, invites.workspaceId))
       .where(and(eq(invites.providerInviteId, input.invite), isNull(workspaces.workosOrganizationId)))
-    if (!invite) return c.json(error('No such invite'), 404)
+    // A Dazbee invite only when WorkOS isn't its provider, as the stand-in is then given for no other.
+    const [dazbee] = invite
+      ? []
+      : await db
+          .select({ id: dazbeeInvites.id, email: dazbeeInvites.email })
+          .from(dazbeeInvites)
+          .where(eq(dazbeeInvites.providerInviteId, input.invite))
+    if (!invite && !(dazbee && dev.dazbee)) return c.json(error('No such invite'), 404)
     const unusable = () => c.json(error('This invite has expired, was revoked or was already used'), 400)
     if ((await dev.provider.read(input.invite)).state !== 'pending') return unusable()
 
-    const { email } = invite
+    const email = invite?.email ?? dazbee?.email ?? ''
     // Only the development person of the email: a WorkOS account with it is never signed in from here.
     const workosUserId = `dev:${email}`
     const [known] = await db.select({ id: users.id }).from(users).where(eq(users.workosUserId, workosUserId))
@@ -117,6 +143,7 @@ export function devInviteRoutes({ db, dev }: { db: Db; dev: DevInvitesSettings |
     try {
       open = await db.transaction(async (tx) => {
         if (!known) await tx.insert(users).values({ ...person, email })
+        if (dazbee) return joinDazbee(tx, dazbee.id, person.id, email)
         // Only the stand-in's invites: a WorkOS invite of the same email is for WorkOS to say.
         const accepting = await acceptInvites(tx, { workos: null, dev: dev.provider }, { ...person, email })
         if (!accepting.open) throw new NotAccepted()
@@ -133,4 +160,18 @@ export function devInviteRoutes({ db, dev }: { db: Db; dev: DevInvitesSettings |
   })
 
   return app
+}
+
+/**
+ * Accepts a Dazbee invite for the person, and answers the workspace they open: the one they used last, else
+ * one of their own, made here with no WorkOS organization. Throws `NotAccepted` when it is no longer pending.
+ */
+async function joinDazbee(tx: Tx, inviteId: string, userId: string, email: string): Promise<string> {
+  if (!(await acceptDazbeeInvite(tx, inviteId))) throw new NotAccepted()
+  const open = await workspaceToOpen(tx, userId)
+  if (open) return open
+  const id = newId()
+  await tx.insert(workspaces).values({ id, name: email.split('@')[0] || email })
+  await tx.insert(memberships).values({ workspaceId: id, userId, role: 'owner' })
+  return id
 }

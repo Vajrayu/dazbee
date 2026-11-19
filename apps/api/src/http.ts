@@ -6,7 +6,7 @@ import type { MiddlewareHandler } from 'hono'
 import type { z } from 'zod'
 
 import type { Db } from '@dazbee/db'
-import { type ApiError, type BrandSummary, roleManages, roleWrites } from '@dazbee/schema'
+import { type ApiError, type BrandSummary, roleManages, roleWrites, type SignInRefused } from '@dazbee/schema'
 
 import type { Session, SessionOf } from './sign-in/session.ts'
 import { findAccess, findBrand, type MemberAccess } from './workspace/workspace.ts'
@@ -46,11 +46,20 @@ export async function body<T extends z.ZodType>(request: Request, schema: T): Pr
   return parsed.data
 }
 
-/** Answers 401 to a request `sessionOf` finds no session for; otherwise puts its session on the context. */
-export function requireSession(sessionOf: SessionOf): MiddlewareHandler<Env> {
+/**
+ * Answers 401 to a request `sessionOf` finds no session for, and to one whose person `refuses` turns away,
+ * with its refusal, as early access does a person whose access was removed; otherwise puts its session on
+ * the context.
+ */
+export function requireSession(
+  sessionOf: SessionOf,
+  refuses: (userId: string) => Promise<SignInRefused | null> = () => Promise.resolve(null),
+): MiddlewareHandler<Env> {
   return async (c, next) => {
     const session = await sessionOf(c.req.raw)
     if (!session) return c.json(error('Sign in first'), 401)
+    const refused = await refuses(session.userId)
+    if (refused) return c.json(refused, 401)
     c.set('session', session)
     await next()
   }
