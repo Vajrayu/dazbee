@@ -1,13 +1,14 @@
 // Sign-in with WorkOS AuthKit (#58). The API alone holds the WorkOS key: it gives the web app the
-// sign-in link, swaps the code WorkOS sends back for the person, and makes their session. Each sign-in
-// accepts the person's invites that their provider says they accepted; one that leaves them in no
-// workspace makes a workspace (one WorkOS organization) with the person as its Owner (ADR-0011).
+// sign-in link, swaps the code WorkOS sends back for the person, and makes their session. During early
+// access only those it allows get in. Each sign-in accepts the person's invites that their provider says
+// they accepted; one that leaves them in no workspace makes a workspace (one WorkOS organization) with the
+// person as its Owner (ADR-0011).
 import { WorkOS } from '@workos-inc/node'
 
 import { type Db, memberships, newId, type Tx, users, workspaces } from '@dazbee/db'
 import type { SignedIn } from '@dazbee/schema'
 
-import { acceptInvite, waitingInvites } from '../members/invites.ts'
+import { acceptInvite, type WaitingInvite, waitingInvites } from '../members/invites.ts'
 import {
   type InvitesProvider,
   invitesProviderFor,
@@ -15,11 +16,13 @@ import {
   type ProviderInvite,
 } from '../members/invites-provider.ts'
 import { workspaceToOpen } from '../workspace/workspace.ts'
+import { type AllowList, earlyAccessRefusal, EarlyAccessRefused } from './early-access.ts'
 import { signSessionToken } from './session.ts'
 
 /** A person WorkOS signed in. */
 export interface SignedInPerson {
-  user: { id: string; email: string; name: string }
+  /** `emailVerified`: whether WorkOS checked the person owns the email. */
+  user: { id: string; email: string; name: string; emailVerified: boolean }
   /** Their WorkOS session, ended again when they sign out. */
   sessionId: string | null
 }
@@ -43,10 +46,24 @@ export interface Accepting {
   unread: boolean
 }
 
-/** Sign-in with WorkOS, when it is set up: the provider, and the secret session tokens are signed with. */
+/** The person's pending invites as their providers hold them, read before anything is written. */
+export interface HeldInvites {
+  /** The pending invites their provider says this person accepted, oldest first. */
+  accepted: WaitingInvite[]
+  /** Whether the person's email has any pending invite. */
+  waiting: boolean
+  /** Whether an invite's provider couldn't be read now, which leaves that invite for a later sign-in. */
+  unread: boolean
+}
+
+/**
+ * Sign-in with WorkOS, when it is set up: the provider, the secret session tokens are signed with, and
+ * early access's allow-list (none lets anyone sign up).
+ */
 export interface SignInSettings {
   provider: SignInProvider
   secret: string
+  allowed?: AllowList
 }
 
 export interface WorkosSettings {
@@ -98,7 +115,10 @@ export function workosProvider({ apiKey, clientId, redirectUri }: WorkosSettings
     async authenticate(code) {
       const { user, accessToken } = await workos.userManagement.authenticateWithCode({ clientId, code })
       const name = [user.firstName, user.lastName].filter(Boolean).join(' ')
-      return { user: { id: user.id, email: user.email, name }, sessionId: accessTokenSessionId(accessToken) }
+      return {
+        user: { id: user.id, email: user.email, name, emailVerified: user.emailVerified },
+        sessionId: accessTokenSessionId(accessToken),
+      }
     },
     async createOrganization(name, workspaceId) {
       return (await workos.organizations.createOrganization({ name, externalId: workspaceId })).id
@@ -114,31 +134,45 @@ export function workosProvider({ apiKey, clientId, redirectUri }: WorkosSettings
 }
 
 /**
- * Signs in a person WorkOS vouched for: records them, accepts their invites, picks the workspace to open
- * (an invite's just accepted, else the one they used last, else the one they joined first) or makes their
- * first, and makes their session, which names no workspace.
+ * Signs in a person WorkOS vouched for: lets them in or refuses them during early access, records them,
+ * accepts their invites, picks the workspace to open (an invite's just accepted, else the one they used
+ * last, else the one they joined first) or makes their first, and makes their session, which names no
+ * workspace. A refused person throws `EarlyAccessRefused`, with nothing recorded.
  */
 export async function completeSignIn(
   db: Db,
-  { provider, secret }: SignInSettings,
+  { provider, secret, allowed = null }: SignInSettings,
   invites: InvitesProviders,
   person: SignedInPerson,
 ): Promise<SignedIn> {
-  const [user] = await db
-    .insert(users)
-    .values({ id: newId(), workosUserId: person.user.id, email: person.user.email, name: person.user.name })
-    .onConflictDoUpdate({ target: users.workosUserId, set: { email: person.user.email, name: person.user.name } })
-    .returning({ id: users.id })
-  if (!user) throw new Error('The user was not recorded')
+  const held = await readInvites(db, invites, { email: person.user.email, workosUserId: person.user.id })
+  const asked = { accepting: held.accepted.length > 0, waiting: held.waiting }
+  const refusal = await earlyAccessRefusal(db, allowed, person, asked)
+  // An unread invite may be one they accepted: refusing them would be wrong.
+  if (refusal && held.unread) throw new SignInUnfinished("Sign-in couldn't finish; try again")
+  if (refusal) throw new EarlyAccessRefused(refusal)
 
-  const accepting = await acceptInvites(db, invites, {
-    id: user.id,
-    email: person.user.email,
-    workosUserId: person.user.id,
+  const { userId, accepted } = await db.transaction(async (tx) => {
+    const [user] = await tx
+      .insert(users)
+      .values({ id: newId(), workosUserId: person.user.id, email: person.user.email, name: person.user.name })
+      .onConflictDoUpdate({ target: users.workosUserId, set: { email: person.user.email, name: person.user.name } })
+      .returning({ id: users.id })
+    if (!user) throw new Error('The user was not recorded')
+    const joined = await acceptHeld(tx, held, user.id)
+    // Invites that stopped being pending since they were read let nobody in: early access asks again
+    // without them, and a refusal undoes the person's record.
+    if (!joined && asked.accepting) {
+      const waiting = (await waitingInvites(tx, person.user.email)).length > 0
+      const again = await earlyAccessRefusal(tx, allowed, person, { accepting: false, waiting })
+      if (again) throw new EarlyAccessRefused(again)
+    }
+    return { userId: user.id, accepted: joined }
   })
-  let open = accepting.open ?? (await workspaceToOpen(db, user.id))
+
+  let open = accepted ?? (await workspaceToOpen(db, userId))
   // An unread invite may be one they accepted: making them a workspace of their own would be wrong.
-  if (!open && accepting.unread) throw new SignInUnfinished("Sign-in couldn't finish; try again")
+  if (!open && held.unread) throw new SignInUnfinished("Sign-in couldn't finish; try again")
   if (!open) {
     // WorkOS first, so a failure there leaves nothing half made here.
     const id = newId()
@@ -147,12 +181,12 @@ export async function completeSignIn(
     await provider.addMember(organizationId, person.user.id)
     await db.transaction(async (tx) => {
       await tx.insert(workspaces).values({ id, name, workosOrganizationId: organizationId })
-      await tx.insert(memberships).values({ workspaceId: id, userId: user.id, role: 'owner' })
+      await tx.insert(memberships).values({ workspaceId: id, userId, role: 'owner' })
     })
     open = id
   }
 
-  const { token, expiresAt } = signSessionToken(secret, { userId: user.id, workosSessionId: person.sessionId })
+  const { token, expiresAt } = signSessionToken(secret, { userId, workosSessionId: person.sessionId })
   return { token, expiresAt, open }
 }
 
@@ -167,17 +201,34 @@ export async function acceptInvites(
   invites: InvitesProviders,
   person: { id: string; email: string; workosUserId: string },
 ): Promise<Accepting> {
+  const held = await readInvites(db, invites, person)
+  return { open: await acceptHeld(db, held, person.id), unread: held.unread }
+}
+
+/** The pending invites of the person's email, each read from its provider; writes nothing. */
+async function readInvites(
+  db: Db | Tx,
+  invites: InvitesProviders,
+  person: { email: string; workosUserId: string },
+): Promise<HeldInvites> {
   const waiting = await waitingInvites(db, person.email)
   const read = await Promise.all(
     waiting.map((invite) => readInvite(invitesProviderFor(invites, invite.organizationId), invite.providerInviteId)),
   )
-  let open: string | null = null
-  for (const [i, invite] of waiting.entries()) {
+  const accepted = waiting.filter((_, i) => {
     const held = read[i]
-    if (held?.state !== 'accepted' || held.acceptedUserId !== person.workosUserId) continue
-    if (await acceptInvite(db, invite.id, person.id)) open = invite.workspaceId
+    return held?.state === 'accepted' && held.acceptedUserId === person.workosUserId
+  })
+  return { accepted, waiting: waiting.length > 0, unread: read.includes(null) }
+}
+
+/** Accepts the invites the person accepted, as user `userId`: the workspace of the newest one accepted, or null. */
+async function acceptHeld(db: Db | Tx, held: HeldInvites, userId: string): Promise<string | null> {
+  let open: string | null = null
+  for (const invite of held.accepted) {
+    if (await acceptInvite(db, invite.id, userId)) open = invite.workspaceId
   }
-  return { open, unread: read.includes(null) }
+  return open
 }
 
 /** The invite as its provider holds it; null when the provider can't say now, undefined when there is none here. */

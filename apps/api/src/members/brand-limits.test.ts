@@ -34,7 +34,12 @@ let people = 0
 function newPerson() {
   const n = (people += 1)
   const person = {
-    user: { id: `user_limit_${n}_${run}`, email: `limit-${n}-${run}@example.com`, name: `Limit ${n}` },
+    user: {
+      id: `user_limit_${n}_${run}`,
+      email: `limit-${n}-${run}@example.com`,
+      name: `Limit ${n}`,
+      emailVerified: true,
+    },
     sessionId: null,
   }
   workos.people[`code-limit-${n}-${run}`] = person

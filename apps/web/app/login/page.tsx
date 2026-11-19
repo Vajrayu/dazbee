@@ -1,10 +1,13 @@
 // Sign in (#58): one button to WorkOS AuthKit, which signs in or signs up. The API makes the link;
 // the state cookie ties WorkOS's answer to this browser. An invite email's link that starts here
-// brings its `invitation_token`, which the sign-in link carries on, so WorkOS accepts the invite.
+// brings its `invitation_token`, which the sign-in link carries on, so WorkOS accepts the invite. A
+// sign-in early access refused comes back with its reason, and the notice says what to do; the address to
+// write to is the setting SUPPORT_EMAIL.
 import { buttonStyles } from '@/components/ui/button.tsx'
 import { DazbeeMark } from '@/components/ui/dazbee-mark.tsx'
 import { WarningCircleIcon } from '@/components/ui/icons.tsx'
 import { cn } from '@/lib/cn.ts'
+import type { Messages } from '@/lib/i18n/en.ts'
 import { getMessages } from '@/lib/i18n/server.ts'
 
 import { start } from './actions.ts'
@@ -25,13 +28,17 @@ export default async function LoginPage({
   searchParams: Promise<{ error?: string; unavailable?: string; invite?: string; invitation_token?: string }>
 }) {
   const [t, query] = await Promise.all([getMessages(), searchParams])
-  const notice = query.unavailable
-    ? t.signIn.unavailable
-    : query.error
-      ? t.signIn.failed
-      : query.invite === 'unusable'
-        ? t.signIn.inviteUnusable
-        : null
+  const notice = query.unavailable ? (
+    t.signIn.unavailable
+  ) : query.error === 'early-access' ? (
+    <EarlyAccessNotice words={t.signIn} email={process.env.SUPPORT_EMAIL?.trim() ?? ''} />
+  ) : query.error === 'open-invite' ? (
+    t.signIn.openInvite
+  ) : query.error ? (
+    t.signIn.failed
+  ) : query.invite === 'unusable' ? (
+    t.signIn.inviteUnusable
+  ) : null
   return (
     <main data-theme="dark" className="relative isolate grid min-h-dvh overflow-hidden bg-bg text-text md:grid-cols-2">
       <aside aria-hidden className="pointer-events-none absolute inset-0 -z-10">
@@ -51,7 +58,7 @@ export default async function LoginPage({
               className="flex items-center gap-2 rounded-[10px] border border-danger/30 bg-danger/10 px-3 py-2.5 text-label text-danger"
             >
               <WarningCircleIcon aria-hidden size={18} weight="bold" className="shrink-0" />
-              {notice}
+              <span>{notice}</span>
             </p>
           )}
           {typeof query.invitation_token === 'string' && (
@@ -70,5 +77,20 @@ export default async function LoginPage({
         </form>
       </section>
     </main>
+  )
+}
+
+/** The early access notice, with the address to write to as a mail link, or without it when none is set. */
+function EarlyAccessNotice({ words, email }: { words: Messages['signIn']; email: string }) {
+  if (!email) return words.earlyAccess
+  const [before = '', after = ''] = words.earlyAccessWrite.split('{email}')
+  return (
+    <>
+      {words.earlyAccess} {before}
+      <a href={`mailto:${email}`} dir="ltr" className="font-semibold underline underline-offset-2">
+        {email}
+      </a>
+      {after}
+    </>
   )
 }

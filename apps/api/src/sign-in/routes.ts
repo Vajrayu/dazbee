@@ -2,10 +2,18 @@
 import { Hono } from 'hono'
 
 import type { Db } from '@dazbee/db'
-import { CompleteSignIn, InvitationToken, type SignedIn, type SignedOut, type SignInLink } from '@dazbee/schema'
+import {
+  CompleteSignIn,
+  InvitationToken,
+  type SignedIn,
+  type SignedOut,
+  type SignInLink,
+  type SignInRefused,
+} from '@dazbee/schema'
 
 import { body, type Env, error } from '../http.ts'
 import type { InvitesProviders } from '../members/invites-provider.ts'
+import { EarlyAccessRefused } from './early-access.ts'
 import { bearerToken, readSessionToken } from './session.ts'
 import { completeSignIn, type SignedInPerson, type SignInSettings, SignInUnfinished } from './sign-in.ts'
 
@@ -46,6 +54,8 @@ export function signInRoutes({
       return c.json((await completeSignIn(db, signIn, invites, person)) satisfies SignedIn)
     } catch (e) {
       if (e instanceof SignInUnfinished) return c.json(error(e.message), 503)
+      if (e instanceof EarlyAccessRefused)
+        return c.json({ ...error(e.message), reason: e.reason } satisfies SignInRefused, 403)
       throw e
     }
   })
