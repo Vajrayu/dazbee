@@ -144,11 +144,17 @@ jobs:
       # and holds a tab open on the sync server; an image whose health check fails is left unserved.
       - name: Deploy while the probe asks
         run: tests/deploy/check.sh "$RUNNER_TEMP/stack" "$GITHUB_SHA"
+      # backup.sh dumps the stack's database to an S3 stand-in while rows are written, and restore.sh
+      # restores it with the counts of its snapshot, refuses the live database without --live, and
+      # with it replaces the live database once nothing is connected.
+      - name: Back up and restore
+        run: tests/deploy/backup-check.sh "$RUNNER_TEMP/stack"
       - if: failure()
         working-directory: ${{ runner.temp }}/stack
         run: |
           docker compose -f deploy/compose.yml --project-directory . --profile blue --profile green logs --no-color --tail 200
           docker logs dazbee-deploy-probe || true
+          docker logs dazbee-backup-store || true
       - if: env.PUSH == 'true'
         uses: docker/login-action@v4
         with:

@@ -9,12 +9,15 @@
 # router needs live/upstreams.caddy, which deploy.sh writes; on a new server, start everything with
 # deploy.sh, or copy deploy/upstreams.caddy into live/ first.
 # Each colour's image tag comes from WEB_BLUE_TAG, WEB_GREEN_TAG, API_BLUE_TAG and API_GREEN_TAG, and
-# the sync server's from SYNC_TAG, each `latest` when unset. Settings come from the .env, whose names
-# deploy/env.example lists; each service gets only the ones it reads.
+# the sync server's from SYNC_TAG, each `latest` when unset. backup-db and backup-store, under the
+# `backup` profile, are run only by deploy/backup.sh and deploy/restore.sh. Settings come from the
+# .env, whose names deploy/env.example lists; each service gets only the ones it reads.
 #
 # Memory caps sit above what each container used idle and with a design open. With both colours of
 # the web app and API running, as during a swap, they add up to no more than 3.5 GB: Caddy 128 MB,
 # the router 64 MB, web 2 x 384 MB, API 2 x 512 MB, sync 1024 MB and Postgres 384 MB make 3392 MB.
+# The backup's two containers, 128 MB each, run one at a time and only for a backup or a restore, so
+# even during a swap the total stays at 3520 MB.
 name: dazbee
 
 x-logging: &logging
@@ -147,6 +150,38 @@ services:
       start_interval: 1s
       timeout: 3s
       retries: 3
+
+  # Postgres's client tools for deploy/backup.sh and deploy/restore.sh, run one-off with compose's
+  # `run`: they connect over the network as the apps do, so a dump's memory isn't Postgres's.
+  backup-db:
+    image: postgres:16-alpine
+    profiles: [backup]
+    logging: *logging
+    mem_limit: 128m
+    environment:
+      PGHOST: postgres
+      PGUSER: dazbee
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      PGDATABASE: dazbee
+
+  # rclone for deploy/backup.sh and deploy/restore.sh, run one-off with compose's `run`, configured
+  # from the .env with no config file: the remote `backups:` is the backups bucket.
+  backup-store:
+    image: rclone/rclone:1.76.0
+    profiles: [backup]
+    logging: *logging
+    mem_limit: 128m
+    environment:
+      RCLONE_CONFIG_R2_TYPE: s3
+      RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+      RCLONE_CONFIG_R2_ENDPOINT: ${R2_BACKUP_ENDPOINT:-}
+      RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${R2_BACKUP_ACCESS_KEY_ID:-}
+      RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${R2_BACKUP_SECRET_ACCESS_KEY:-}
+      RCLONE_CONFIG_R2_REGION: auto
+      # The key is limited to the bucket, so rclone must not try to make it.
+      RCLONE_CONFIG_R2_NO_CHECK_BUCKET: 'true'
+      RCLONE_CONFIG_BACKUPS_TYPE: alias
+      RCLONE_CONFIG_BACKUPS_REMOTE: r2:${R2_BACKUP_BUCKET:-}
 
 volumes:
   postgres:
