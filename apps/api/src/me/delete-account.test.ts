@@ -278,7 +278,7 @@ describe('DELETE /me', () => {
   })
 
   it('keeps what storage and WorkOS failed to delete, and deletes it on the next start', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    vi.spyOn(console, 'log').mockImplementation(() => undefined)
     const { own, person } = await soloAccount()
     const failingStorage = { ...storage, deleteFolder: () => Promise.reject(new Error('storage is down')) }
     const failing = createApp({
@@ -301,7 +301,7 @@ describe('DELETE /me', () => {
     expect(await db.select().from(users).where(eq(users.id, person.id))).toEqual([])
     const targets = [`workspaces/${own.id}/`, organizationOf(own.id), person.workosUserId]
     // The deletions after the answer have run and failed.
-    await vi.waitFor(() => expect(console.error).toHaveBeenCalledTimes(3))
+    await vi.waitFor(() => expect(console.log).toHaveBeenCalledTimes(3))
     expect((await pendingFor(targets)).map((row) => row.kind).sort()).toEqual([
       'storage-folder',
       'workos-organization',

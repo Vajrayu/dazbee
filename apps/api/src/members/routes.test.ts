@@ -176,7 +176,7 @@ describe('inviting', () => {
   it('leaves no invite behind when WorkOS can’t send it, so inviting again works', async () => {
     const email = fresh()
     vi.spyOn(workos.invites, 'invite').mockRejectedValueOnce(new Error('WorkOS is down'))
-    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'log').mockImplementation(() => {})
     expect((await call('a', 'POST', '/invites', { email, role: 'editor' })).status).toBe(500)
     expect(await db.select().from(invites).where(eq(invites.email, email))).toEqual([])
     expect((await invite(email, 'editor')).email).toBe(email)
@@ -188,7 +188,7 @@ describe('inviting', () => {
     vi.spyOn(db, 'update').mockImplementationOnce(() => {
       throw new Error('connection lost')
     })
-    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'log').mockImplementation(() => {})
     expect((await call('a', 'POST', '/invites', { email, role: 'editor' })).status).toBe(500)
     expect(await workosStates(email)).toEqual(['revoked'])
     expect(await db.select().from(invites).where(eq(invites.email, email))).toEqual([])

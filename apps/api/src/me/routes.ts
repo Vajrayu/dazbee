@@ -6,6 +6,7 @@ import type { Db } from '@dazbee/db'
 import { type AccountDeletion, DeleteAccount, type DeleteAccountRefused, type Me } from '@dazbee/schema'
 
 import { body, type Env, error } from '../http.ts'
+import { logError } from '../log.ts'
 import { accountDeletion, AccountRefusal, deleteAccount } from './delete-account.ts'
 import { findMe } from './me.ts'
 import { type Deleters, finishSoon } from './pending-deletions.ts'
@@ -45,7 +46,7 @@ export function meRoutes({
       if (!(e instanceof AccountRefusal)) throw e
       return c.json({ ...error(e.message), handOver: e.handOver } satisfies DeleteAccountRefused, e.status)
     }
-    await endWorkosSession(c.req.raw).catch((e: unknown) => console.error('the WorkOS session did not end', e))
+    await endWorkosSession(c.req.raw).catch((e: unknown) => logError('workos-session-not-ended', e))
     finishSoon(db, deleters, pending)
     return c.body(null, 204)
   })

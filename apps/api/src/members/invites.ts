@@ -9,6 +9,7 @@ import { and, asc, eq, gt, inArray, isNotNull, isNull, lte, sql } from 'drizzle-
 import { type Db, invites, memberships, newId, type Tx, users, workspaces } from '@dazbee/db'
 import type { CreateInvite, Invite, InviteRole, MemberBrands } from '@dazbee/schema'
 
+import { logError } from '../log.ts'
 import { checkLimit, writeLimit } from './brand-limits.ts'
 import { inviteExpiry, type InvitesProvider, type ProviderInvite } from './invites-provider.ts'
 
@@ -324,7 +325,7 @@ async function revokeQuietly(provider: InvitesProvider, id: string): Promise<voi
   try {
     await provider.revoke(id)
   } catch (e) {
-    console.error(e)
+    logError('invite-not-revoked', e)
   }
 }
 
@@ -333,7 +334,7 @@ async function deleteQuietly(db: Db, inviteId: string): Promise<void> {
   try {
     await db.delete(invites).where(eq(invites.id, inviteId))
   } catch (e) {
-    console.error(e)
+    logError('invite-not-deleted', e)
   }
 }
 

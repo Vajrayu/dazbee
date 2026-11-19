@@ -206,7 +206,7 @@ describe('early access at sign-in', () => {
     const { person, code } = newPerson()
     await invite(person.user.email)
     vi.spyOn(workos.invites, 'read').mockRejectedValueOnce(new Error('WorkOS is down'))
-    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'log').mockImplementation(() => {})
     const answer = await signIn(code)
     expect(answer.status).toBe(503)
     expect(await recordsOf(person)).toEqual({ users: [], memberships: [], workspaces: [] })

@@ -12,6 +12,7 @@ import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lte, sql } from 'dr
 import { dazbeeInvites, type Db, newId, type Tx, users } from '@dazbee/db'
 import type { DazbeeInvite, DazbeeInvites, InvitedPerson } from '@dazbee/schema'
 
+import { logError } from '../log.ts'
 import { InvalidInvite, InviteConflict, type Revoked, revokeWithProvider } from '../members/invites.ts'
 import { inviteExpiry, type InvitesProvider, type ProviderInvite } from '../members/invites-provider.ts'
 import type { Admins } from './admins.ts'
@@ -331,7 +332,7 @@ async function revokeQuietly(provider: InvitesProvider, id: string): Promise<voi
   try {
     await provider.revoke(id)
   } catch (e) {
-    console.error(e)
+    logError('invite-not-revoked', e)
   }
 }
 
@@ -340,7 +341,7 @@ async function deleteQuietly(db: Db, inviteId: string): Promise<void> {
   try {
     await db.delete(dazbeeInvites).where(eq(dazbeeInvites.id, inviteId))
   } catch (e) {
-    console.error(e)
+    logError('invite-not-deleted', e)
   }
 }
 

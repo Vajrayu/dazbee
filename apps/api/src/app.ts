@@ -23,6 +23,7 @@ import { brandKitRoutes } from './brand-kits/routes.ts'
 import { InvalidFont } from './fonts/fonts.ts'
 import { fontRoutes } from './fonts/routes.ts'
 import { brandScope, type Env, error, membershipScope, requireSession } from './http.ts'
+import { logError } from './log.ts'
 import { meRoutes } from './me/routes.ts'
 import { InvalidLimit } from './members/brand-limits.ts'
 import { InvalidInvite, InviteConflict } from './members/invites.ts'
@@ -112,7 +113,7 @@ export function createApp({
       e instanceof InvalidLimit
     )
       return c.json(error(e.message), 400)
-    console.error(e)
+    logError('unexpected-error', e, { method: c.req.method, route: c.req.routePath })
     return c.json(error('Something went wrong on our side'), 500)
   })
 

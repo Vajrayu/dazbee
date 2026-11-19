@@ -1,38 +1,28 @@
 'use server'
 
-// Starts sign-in: asks the API for WorkOS's sign-in page, carrying the token of the invite the person
-// came from, and keeps the state and that token in short-lived cookies for WorkOS's answer at /callback.
-// On the pilot host, WorkOS answers at that host's own /callback. And sends a request to join from the
-// early-access notice, with the person's address as Cloudflare saw it and the form's Turnstile token.
-import { randomBytes } from 'node:crypto'
-
-import { cookies, headers } from 'next/headers'
+// Starts sign-in at WorkOS, carrying the token of the invite the person came from. And sends a request to
+// join from the early-access notice, with the person's address as Cloudflare saw it and the form's
+// Turnstile token.
+import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 
-import { InvitationToken, RequestAccess } from '@dazbee/schema'
+import { RequestAccess } from '@dazbee/schema'
 
 import { getMessages } from '@/lib/i18n/server.ts'
-import { isPilotHost } from '@/lib/pilot-host.ts'
 import { requestAccess } from '@/lib/server/admin.ts'
-import { ApiFailure, signInLink } from '@/lib/server/api.ts'
-import { cookieOptions, INVITATION_COOKIE, STATE_COOKIE, STATE_SECONDS } from '@/lib/server/sign-in.ts'
+import { ApiFailure } from '@/lib/server/api.ts'
+import { logSignIn, startSignIn } from '@/lib/server/sign-in.ts'
 
 /** What a request to join answered: sent, why it wasn't, or nothing yet. */
 export type RequestAnswer = { sent: true } | { error: string } | null
 
 export async function start(form: FormData) {
-  const state = randomBytes(24).toString('base64url')
-  const token = InvitationToken.safeParse(form.get('invitation_token'))
   const asked = await headers()
-  const origin = asked.get('origin')
-  const pilotCallback = origin && isPilotHost(asked.get('host')) ? new URL('/callback', origin).href : undefined
-  const url = await signInLink(state, token.data, pilotCallback)
-  if (!url) redirect('/login?unavailable=1')
-  const jar = await cookies()
-  const options = { ...cookieOptions(origin), maxAge: STATE_SECONDS }
-  jar.set(STATE_COOKIE, state, options)
-  if (token.success) jar.set(INVITATION_COOKIE, token.data, options)
-  else jar.delete(INVITATION_COOKIE)
+  const url = await startSignIn(form.get('invitation_token'), { origin: asked.get('origin'), host: asked.get('host') })
+  if (!url) {
+    logSignIn('unavailable')
+    redirect('/login?unavailable=1')
+  }
   redirect(url)
 }
 

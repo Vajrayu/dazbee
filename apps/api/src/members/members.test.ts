@@ -174,7 +174,7 @@ describe('removing a member', () => {
   it('removes nothing when WorkOS can’t take the member out, so trying again works', async () => {
     const { owner, editor } = await team()
     vi.spyOn(workos.invites, 'removeMember').mockRejectedValueOnce(new Error('WorkOS is down'))
-    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'log').mockImplementation(() => {})
     expect((await call(owner.as, 'DELETE', `/members/${editor.id}`)).status).toBe(500)
     expect((await membersOf(owner.as)).map((m) => m.id)).toContain(editor.id)
     expect((await call(owner.as, 'DELETE', `/members/${editor.id}`)).status).toBe(204)
