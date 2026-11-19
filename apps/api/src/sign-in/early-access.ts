@@ -1,12 +1,12 @@
 // Early access: while the allow-list is set, sign-in lets in only a person who already has a membership,
 // one whose sign-in accepts an invite, and one whose verified email is on the list. Asking only reads, so a
-// refused person leaves no row behind.
+// refused person leaves no row behind, and their WorkOS session is ended so they can sign in as someone else.
 import { eq } from 'drizzle-orm'
 
 import { type Db, memberships, type Tx, users } from '@dazbee/db'
 import type { SignInRefusal } from '@dazbee/schema'
 
-import type { SignedInPerson } from './sign-in.ts'
+import type { SignedInPerson, SignInProvider } from './sign-in.ts'
 
 /** The emails allowed to sign up, in lower case; null lets anyone sign up. */
 export type AllowList = ReadonlySet<string> | null
@@ -38,7 +38,7 @@ export function allowList(env: NodeJS.ProcessEnv = process.env): AllowList {
 /**
  * Why early access refuses the person, or null when it lets them in: always with no allow-list, else when
  * their sign-in accepts an invite, their verified email is on the list, or they already have a membership.
- * A refused person with a pending invite of their email is told to open it.
+ * A refused person whose verified email has an invite still pending with its provider is told to open it.
  */
 export async function earlyAccessRefusal(
   db: Db | Tx,
@@ -49,7 +49,17 @@ export async function earlyAccessRefusal(
   if (!allowed || invites.accepting) return null
   if (person.user.emailVerified && allowed.has(person.user.email.toLowerCase())) return null
   if (await hasMembership(db, person.user.id)) return null
-  return invites.waiting ? 'open-invite' : 'early-access'
+  return invites.waiting && person.user.emailVerified ? 'open-invite' : 'early-access'
+}
+
+/** Ends a refused person's WorkOS session, so their next sign-in can be with another account. */
+export async function endRefusedSession(provider: SignInProvider, person: SignedInPerson): Promise<void> {
+  if (!person.sessionId) return
+  try {
+    await provider.endSession(person.sessionId)
+  } catch (e) {
+    console.error(e)
+  }
 }
 
 /** Whether the WorkOS user is already a member of some workspace. */

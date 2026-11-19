@@ -42,7 +42,7 @@ let people = 0
 function newPerson(email = `early-${(people += 1)}-${run}@example.com`, emailVerified = true) {
   const person: SignedInPerson = {
     user: { id: `user_early_${randomUUID()}`, email, name: `Early ${email}`, emailVerified },
-    sessionId: null,
+    sessionId: `session_early_${randomUUID()}`,
   }
   const code = `code-early-${randomUUID()}`
   workos.people[code] = person
@@ -72,7 +72,10 @@ async function recordsOf(person: SignedInPerson) {
   }
 }
 
-/** Expects the person refused for `reason`, with nothing recorded of them and no WorkOS organization made. */
+/**
+ * Expects the person refused for `reason`, with nothing recorded of them, no WorkOS organization made, and
+ * their WorkOS session ended.
+ */
 async function expectRefused(code: string, person: SignedInPerson, reason: SignInRefused['reason']) {
   const organizations = workos.made.organizations.length
   const answer = await signIn(code)
@@ -80,6 +83,7 @@ async function expectRefused(code: string, person: SignedInPerson, reason: SignI
   expect(SignInRefused.parse(answer.json).reason).toBe(reason)
   expect(await recordsOf(person)).toEqual({ users: [], memberships: [], workspaces: [] })
   expect(workos.made.organizations).toHaveLength(organizations)
+  expect(workos.made.endedSessions).toContain(person.sessionId)
 }
 
 /** Invites the email to workspace A as its Owner; the WorkOS invitation it sent. */
@@ -144,6 +148,18 @@ describe('early access at sign-in', () => {
     await expectRefused(code, person, 'open-invite')
   })
 
+  it('tells a person to open an invite only when their email is verified and the invite still pending', async () => {
+    const unverified = newPerson(undefined, false)
+    await invite(unverified.person.user.email)
+    await expectRefused(unverified.code, unverified.person, 'early-access')
+
+    const revoked = newPerson()
+    const { invitationId } = await invite(revoked.person.user.email)
+    // Revoked with WorkOS, though still pending here.
+    await workos.invites.revoke(invitationId)
+    await expectRefused(revoked.code, revoked.person, 'early-access')
+  })
+
   it('refuses anyone else', async () => {
     const { person, code } = newPerson()
     await expectRefused(code, person, 'early-access')
@@ -163,6 +179,28 @@ describe('early access at sign-in', () => {
     await expectRefused(code, person, 'early-access')
   })
 
+  it('makes no workspace for a member removed while they signed in', async () => {
+    const member = await addPerson([[workspace.id, 'editor']])
+    const person: SignedInPerson = {
+      user: { id: member.workosUserId, email: member.email, name: member.name, emailVerified: true },
+      sessionId: `session_member_${randomUUID()}`,
+    }
+    const code = `code-member-${randomUUID()}`
+    workos.people[code] = person
+    // The membership is removed once early access has let them in, before they are recorded.
+    const transaction = db.transaction.bind(db)
+    vi.spyOn(db, 'transaction').mockImplementationOnce(async (...args) => {
+      await db.delete(memberships).where(eq(memberships.userId, member.id))
+      return transaction(...args)
+    })
+    const organizations = workos.made.organizations.length
+    const answer = await signIn(code)
+    expect(answer.status).toBe(403)
+    expect(SignInRefused.parse(answer.json).reason).toBe('early-access')
+    expect(await recordsOf(person)).toMatchObject({ memberships: [], workspaces: [] })
+    expect(workos.made.organizations).toHaveLength(organizations)
+  })
+
   it('asks a refused person to try again while an invite of theirs can’t be read, recording nothing', async () => {
     const { person, code } = newPerson()
     await invite(person.user.email)
@@ -171,6 +209,7 @@ describe('early access at sign-in', () => {
     const answer = await signIn(code)
     expect(answer.status).toBe(503)
     expect(await recordsOf(person)).toEqual({ users: [], memberships: [], workspaces: [] })
+    expect(workos.made.endedSessions).not.toContain(person.sessionId)
   })
 
   it('lets anyone in when the list is empty', async () => {

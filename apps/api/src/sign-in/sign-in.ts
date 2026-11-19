@@ -38,6 +38,8 @@ export interface SignInProvider {
   addMember(organizationId: string, workosUserId: string): Promise<void>
   /** Where to end a WorkOS session; WorkOS then sends the person to the web app's /login. */
   signOutUrl(sessionId: string): string
+  /** Ends a WorkOS session from here, so the next sign-in asks who the person is again. */
+  endSession(sessionId: string): Promise<void>
 }
 
 /** What accepting a person's invites did: the workspace to open, and whether an invite went unread. */
@@ -50,7 +52,7 @@ export interface Accepting {
 export interface HeldInvites {
   /** The pending invites their provider says this person accepted, oldest first. */
   accepted: WaitingInvite[]
-  /** Whether the person's email has any pending invite. */
+  /** Whether the person's email has an invite its provider still holds as pending. */
   waiting: boolean
   /** Whether an invite's provider couldn't be read now, which leaves that invite for a later sign-in. */
   unread: boolean
@@ -130,6 +132,9 @@ export function workosProvider({ apiKey, clientId, redirectUri }: WorkosSettings
     // WorkOS sends the person back to the web app's /login, on the same site as its /callback.
     signOutUrl: (sessionId) =>
       workos.userManagement.getLogoutUrl({ sessionId, returnTo: new URL('/login', redirectUri).href }),
+    async endSession(sessionId) {
+      await workos.userManagement.revokeSession({ sessionId })
+    },
   }
 }
 
@@ -137,7 +142,8 @@ export function workosProvider({ apiKey, clientId, redirectUri }: WorkosSettings
  * Signs in a person WorkOS vouched for: lets them in or refuses them during early access, records them,
  * accepts their invites, picks the workspace to open (an invite's just accepted, else the one they used
  * last, else the one they joined first) or makes their first, and makes their session, which names no
- * workspace. A refused person throws `EarlyAccessRefused`, with nothing recorded.
+ * workspace. A refused person throws `EarlyAccessRefused` with nothing recorded, and during early access
+ * only a verified email on the list gets a workspace of its own.
  */
 export async function completeSignIn(
   db: Db,
@@ -146,33 +152,34 @@ export async function completeSignIn(
   person: SignedInPerson,
 ): Promise<SignedIn> {
   const held = await readInvites(db, invites, { email: person.user.email, workosUserId: person.user.id })
-  const asked = { accepting: held.accepted.length > 0, waiting: held.waiting }
-  const refusal = await earlyAccessRefusal(db, allowed, person, asked)
+  const refusal = await earlyAccessRefusal(db, allowed, person, {
+    accepting: held.accepted.length > 0,
+    waiting: held.waiting,
+  })
   // An unread invite may be one they accepted: refusing them would be wrong.
   if (refusal && held.unread) throw new SignInUnfinished("Sign-in couldn't finish; try again")
   if (refusal) throw new EarlyAccessRefused(refusal)
 
-  const { userId, accepted } = await db.transaction(async (tx) => {
+  const { userId, found } = await db.transaction(async (tx) => {
     const [user] = await tx
       .insert(users)
       .values({ id: newId(), workosUserId: person.user.id, email: person.user.email, name: person.user.name })
       .onConflictDoUpdate({ target: users.workosUserId, set: { email: person.user.email, name: person.user.name } })
       .returning({ id: users.id })
     if (!user) throw new Error('The user was not recorded')
-    const joined = await acceptHeld(tx, held, user.id)
-    // Invites that stopped being pending since they were read let nobody in: early access asks again
-    // without them, and a refusal undoes the person's record.
-    if (!joined && asked.accepting) {
-      const waiting = (await waitingInvites(tx, person.user.email)).length > 0
-      const again = await earlyAccessRefusal(tx, allowed, person, { accepting: false, waiting })
+    const open = (await acceptHeld(tx, held, user.id)) ?? (await workspaceToOpen(tx, user.id))
+    // An unread invite may be one they accepted: making them a workspace of their own would be wrong.
+    if (!open && held.unread) throw new SignInUnfinished("Sign-in couldn't finish; try again")
+    // A person about to get a workspace of their own is asked again, with no invite or membership left to
+    // let them in; a refusal undoes their record.
+    if (!open) {
+      const again = await earlyAccessRefusal(tx, allowed, person, { accepting: false, waiting: held.waiting })
       if (again) throw new EarlyAccessRefused(again)
     }
-    return { userId: user.id, accepted: joined }
+    return { userId: user.id, found: open }
   })
 
-  let open = accepted ?? (await workspaceToOpen(db, userId))
-  // An unread invite may be one they accepted: making them a workspace of their own would be wrong.
-  if (!open && held.unread) throw new SignInUnfinished("Sign-in couldn't finish; try again")
+  let open = found
   if (!open) {
     // WorkOS first, so a failure there leaves nothing half made here.
     const id = newId()
@@ -219,7 +226,11 @@ async function readInvites(
     const held = read[i]
     return held?.state === 'accepted' && held.acceptedUserId === person.workosUserId
   })
-  return { accepted, waiting: waiting.length > 0, unread: read.includes(null) }
+  return {
+    accepted,
+    waiting: read.some((held) => held?.state === 'pending'),
+    unread: read.includes(null),
+  }
 }
 
 /** Accepts the invites the person accepted, as user `userId`: the workspace of the newest one accepted, or null. */

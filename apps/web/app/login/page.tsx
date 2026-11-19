@@ -58,7 +58,7 @@ export default async function LoginPage({
               className="flex items-center gap-2 rounded-[10px] border border-danger/30 bg-danger/10 px-3 py-2.5 text-label text-danger"
             >
               <WarningCircleIcon aria-hidden size={18} weight="bold" className="shrink-0" />
-              <span>{notice}</span>
+              <span className="min-w-0">{notice}</span>
             </p>
           )}
           {typeof query.invitation_token === 'string' && (
@@ -87,7 +87,11 @@ function EarlyAccessNotice({ words, email }: { words: Messages['signIn']; email:
   return (
     <>
       {words.earlyAccess} {before}
-      <a href={`mailto:${email}`} dir="ltr" className="font-semibold underline underline-offset-2">
+      <a
+        href={`mailto:${email}`}
+        dir="ltr"
+        className="font-semibold [overflow-wrap:anywhere] underline underline-offset-2"
+      >
         {email}
       </a>
       {after}
