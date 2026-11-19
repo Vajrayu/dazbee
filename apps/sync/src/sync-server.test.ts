@@ -7,12 +7,11 @@ import { connect } from 'node:net'
 import { afterAll, describe, expect, it } from 'vitest'
 
 import { loadDesignRows } from '@dazbee/db'
-import { type Client, openClient } from '@dazbee/doc'
-import { type Change, type DesignRecords, SYNC_CLOSE } from '@dazbee/schema'
+import { type DesignRecords, SYNC_CLOSE } from '@dazbee/schema'
 
 import { BOB, changes, rename, storeSaved } from './test-saves.ts'
 import { closeDatabase, db, pause, tokenFor, until } from './test-sync.ts'
-import { openTab, startServer, type TestTab, typesOf, welcomeOf } from './test-tab.ts'
+import { clientTab, openTab, quiet, startServer, typesOf, welcomeOf } from './test-tab.ts'
 
 const servers: { destroy(): Promise<void> }[] = []
 afterAll(async () => {
@@ -185,57 +184,6 @@ describe('previews to a tab that is behind', () => {
     for (const tab of [ann, bob]) tab.close()
   })
 })
-
-/** A tab on the sync client, as the editor will run one: every message to the client, every answer sent. */
-async function clientTab(url: string, design: string, token: string) {
-  let client: Client | undefined
-  let tab: TestTab
-  const wire = (t: TestTab) => {
-    t.onMessage = (message) => {
-      if (!client) {
-        if (message.type === 'welcome') client = openClient(message)
-        return
-      }
-      for (const out of client.receive(message)) t.send(out)
-    }
-  }
-  tab = await openTab(url, design)
-  wire(tab)
-  tab.hello(token)
-  await tab.next('welcome')
-  const driven = {
-    client: () => client as Client,
-    send: (outs: readonly unknown[]) => outs.forEach((out) => tab.send(out)),
-    /** One step: the changes written and sent as one change set. */
-    edit(...changes: Change[]) {
-      const c = driven.client()
-      c.open()
-      for (const change of changes) c.write(change)
-      driven.send(c.end('Rename'))
-    },
-    async reconnect(to: string) {
-      driven.client().disconnect()
-      tab.close()
-      tab = await openTab(to, design)
-      wire(tab)
-      tab.send(driven.client().reconnect(token))
-      await tab.next('welcome')
-    },
-    close: () => tab.close(),
-  }
-  return driven
-}
-
-type Driven = Awaited<ReturnType<typeof clientTab>>
-
-/** Waits until every tab has nothing in its queue and all are at one sequence number. */
-async function quiet(...tabs: Driven[]) {
-  const ok = await until(() => {
-    const seqs = new Set(tabs.map((t) => t.client().seq()))
-    return seqs.size === 1 && tabs.every((t) => t.client().queued() === 0)
-  })
-  if (!ok) throw new Error(`tabs did not settle: ${tabs.map((t) => `${t.client().seq()}/${t.client().queued()}`)}`)
-}
 
 const names = (design: DesignRecords) =>
   Object.fromEntries(Object.entries(design.nodes).map(([id, node]) => [id, (node as { name: string }).name]))
