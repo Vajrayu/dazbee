@@ -47,7 +47,8 @@ jobs:
           retention-days: 7
 
   # The production images: built, run with deploy/compose.yml behind Caddy with a test .env and a
-  # self-signed certificate, and checked. On main they are pushed to GitHub's container registry.
+  # self-signed certificate, checked, and deployed over each other with deploy/deploy.sh. On main they
+  # are pushed to GitHub's container registry.
   images:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -107,13 +108,12 @@ jobs:
             for name in WEB_BLUE_TAG WEB_GREEN_TAG API_BLUE_TAG API_GREEN_TAG SYNC_TAG; do echo "$name=$GITHUB_SHA"; done
           } > "$stack/.env"
           cd "$stack"
-          docker compose -f deploy/compose.yml --project-directory . up -d --wait
-          # Green after blue, so the two APIs never migrate a new database at once.
-          docker compose -f deploy/compose.yml --project-directory . --profile green up -d --wait
+          # Both colours at once: the migration lock keeps their APIs from migrating the new database together.
+          docker compose -f deploy/compose.yml --project-directory . --profile blue --profile green up -d --wait
       - name: Check the stack
         working-directory: ${{ runner.temp }}/stack
         run: |
-          compose() { docker compose -f deploy/compose.yml --project-directory . --profile green "$@"; }
+          compose() { docker compose -f deploy/compose.yml --project-directory . --profile blue --profile green "$@"; }
           https() { curl -sS --resolve app.dazbee.com:443:127.0.0.1 --resolve sync.dazbee.com:443:127.0.0.1 --cacert certs/origin.pem "$@"; }
           for service in web-blue web-green api-blue api-green sync postgres; do
             read -r health ports < <(docker inspect -f '{{.State.Health.Status}} {{len .HostConfig.PortBindings}}' "$(compose ps -q "$service")")
@@ -133,9 +133,22 @@ jobs:
             grep -q "\"build\":\"$GITHUB_SHA\"" <<< "$health"
             echo "$api/health names build $GITHUB_SHA"
           done
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      # The probe's packages: the deploy check runs it in a Node container with this checkout.
+      - run: pnpm install --frozen-lockfile --filter @dazbee/deploy-check...
+      # deploy.sh swaps the stack's apps while the probe asks the web app and the API every 100 ms
+      # and holds a tab open on the sync server; an image whose health check fails is left unserved.
+      - name: Deploy while the probe asks
+        run: tests/deploy/check.sh "$RUNNER_TEMP/stack" "$GITHUB_SHA"
       - if: failure()
         working-directory: ${{ runner.temp }}/stack
-        run: docker compose -f deploy/compose.yml --project-directory . --profile green logs --no-color --tail 200
+        run: |
+          docker compose -f deploy/compose.yml --project-directory . --profile blue --profile green logs --no-color --tail 200
+          docker logs dazbee-deploy-probe || true
       - if: env.PUSH == 'true'
         uses: docker/login-action@v4
         with:

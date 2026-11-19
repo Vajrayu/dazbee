@@ -1,4 +1,4 @@
-# The live colour of the web app and of the API, which the Caddyfile imports from live/upstreams.caddy.
+# The live colour of the web app and of the API, which the router imports from live/upstreams.caddy.
 # This copy, with blue live, is the one a new server starts with; the deploy script rewrites the
 # one in live/ at each swap.
 (web_upstream) {

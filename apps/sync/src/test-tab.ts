@@ -1,11 +1,14 @@
-// What the sync server's socket tests share: the server on a free port over the test database, and a
-// stand-in tab, a WebSocket that says hello and sends and reads the protocol's JSON.
+// What the sync server's socket tests share: the server on a free port over the test database, a
+// stand-in tab, a WebSocket that says hello and sends and reads the protocol's JSON, and a tab on the
+// sync client, as the editor runs one.
 import type { AddressInfo } from 'node:net'
 import { gunzipSync } from 'node:zlib'
 
 import { WebSocket } from 'ws'
 
+import { type Client, openClient } from '@dazbee/doc'
 import {
+  type Change,
   DESIGN_PARAM,
   PROTOCOL,
   type Resume,
@@ -109,3 +112,60 @@ export function welcomeOf(tab: TestTab) {
 
 /** The types of what a tab heard. */
 export const typesOf = (tab: TestTab) => tab.heard.map((m) => m.type)
+
+/** A tab on the sync client, as the editor will run one: every message to the client, every answer sent. */
+export async function clientTab(url: string, design: string, token: string) {
+  let client: Client | undefined
+  let tab: TestTab
+  // Whether the client stops hearing the server, as when its answers are lost on the way.
+  let deaf = false
+  const wire = (t: TestTab) => {
+    t.onMessage = (message) => {
+      if (deaf) return
+      if (!client) {
+        if (message.type === 'welcome') client = openClient(message)
+        return
+      }
+      for (const out of client.receive(message)) t.send(out)
+    }
+  }
+  tab = await openTab(url, design)
+  wire(tab)
+  tab.hello(token)
+  await tab.next('welcome')
+  const driven = {
+    client: () => client as Client,
+    send: (outs: readonly unknown[]) => outs.forEach((out) => tab.send(out)),
+    /** One step: the changes written and sent as one change set. */
+    edit(...changes: Change[]) {
+      const c = driven.client()
+      c.open()
+      for (const change of changes) c.write(change)
+      driven.send(c.end('Rename'))
+    },
+    /** Stops the client hearing the server until the next reconnect. */
+    deafen: () => (deaf = true),
+    async reconnect(to: string) {
+      driven.client().disconnect()
+      deaf = false
+      tab.close()
+      tab = await openTab(to, design)
+      wire(tab)
+      tab.send(driven.client().reconnect(token))
+      await tab.next('welcome')
+    },
+    close: () => tab.close(),
+  }
+  return driven
+}
+
+export type Driven = Awaited<ReturnType<typeof clientTab>>
+
+/** Waits until every tab has nothing in its queue and all are at one sequence number. */
+export async function quiet(...tabs: Driven[]) {
+  const ok = await until(() => {
+    const seqs = new Set(tabs.map((t) => t.client().seq()))
+    return seqs.size === 1 && tabs.every((t) => t.client().queued() === 0)
+  })
+  if (!ok) throw new Error(`tabs did not settle: ${tabs.map((t) => `${t.client().seq()}/${t.client().queued()}`)}`)
+}

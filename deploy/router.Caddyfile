@@ -1,0 +1,27 @@
+# The router: a Caddy that only the containers reach, over plain HTTP, sending :3000 to the live
+# colour of the web app and :8787 to the live colour of the API. Which colour is live comes from
+# live/upstreams.caddy, which deploy/deploy.sh rewrites before it reloads the router; requests the
+# old colour holds then end there, and every new one goes to the new colour.
+{
+	auto_https off
+	servers {
+		protocols h1
+		# Caddy in front says how each request came, https for the public sites, and the router passes
+		# that on, so the web app sets its cookies Secure.
+		trusted_proxies static private_ranges
+	}
+}
+
+import /etc/caddy/live/upstreams.caddy
+
+:3000 {
+	reverse_proxy {
+		import web_upstream
+	}
+}
+
+:8787 {
+	reverse_proxy {
+		import api_upstream
+	}
+}
