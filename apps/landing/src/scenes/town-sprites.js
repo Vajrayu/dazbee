@@ -3,13 +3,13 @@
 export const SPRITES = {
   'b-house-a': {
     src: '/sprites/city/buildings/b-house-a.webp',
-    w: 515,
-    h: 495,
-    ox: 257.7,
-    oy: 492.2,
+    w: 514,
+    h: 491,
+    ox: 257.0,
+    oy: 488.5,
     W: 2,
     D: 2,
-    ok: false,
+    ok: true,
   },
   'b-house-b': {
     src: '/sprites/city/buildings/b-house-b.webp',
@@ -44,12 +44,12 @@ export const SPRITES = {
   'b-apartments': {
     src: '/sprites/city/buildings/b-apartments.webp',
     w: 642,
-    h: 662,
-    ox: 257.1,
-    oy: 659.3,
+    h: 893,
+    ox: 256.7,
+    oy: 890.4,
     W: 2,
     D: 3,
-    ok: false,
+    ok: true,
   },
   'b-gym': {
     src: '/sprites/city/buildings/b-gym.webp',
@@ -74,12 +74,12 @@ export const SPRITES = {
   's-kiosk': {
     src: '/sprites/city/street/s-kiosk.webp',
     w: 257,
-    h: 274,
-    ox: 127.8,
-    oy: 271.7,
+    h: 253,
+    ox: 128.1,
+    oy: 251.0,
     W: 1,
     D: 1,
-    ok: false,
+    ok: true,
   },
   's-bus-shelter': {
     src: '/sprites/city/street/s-bus-shelter.webp',
