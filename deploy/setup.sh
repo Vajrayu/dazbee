@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
-# Sets up the server Dazbee runs on (ADR-0017): Ubuntu with Docker installed. Run it as root; running
-# it again changes only what differs, and fetches Cloudflare's address ranges afresh, so run it again
-# when Cloudflare publishes new ones.
+# Sets up the server Dazbee runs on (ADR-0017): Ubuntu with Docker installed. Run it as root, over
+# SSH; running it again changes only what differs, and fetches Cloudflare's address ranges afresh,
+# so run it again when Cloudflare publishes new ones.
 #
 #   bash setup.sh            the whole setup
 #   bash setup.sh firewall   only the DOCKER-USER rules, from the ranges the last setup saved; the
-#                            dazbee-firewall service runs this each time Docker starts
+#                            dazbee-firewall service runs this as the server starts, before Docker
 #
 # It sets up:
 #   - the deploy user, in the docker group, owning /opt/dazbee and its live/ and certs/ folders;
-#   - ufw allowing SSH in and nothing else;
-#   - rules in the DOCKER-USER chain that drop 80 and 443 from anyone outside Cloudflare's ranges, since
-#     Docker's published ports pass by ufw; the ranges are saved in /etc/dazbee, and the
-#     dazbee-firewall service puts the rules back each time Docker starts, so a reboot keeps them;
+#   - ufw allowing SSH in and nothing else, removing any other rule it has;
+#   - rules in the DOCKER-USER chain that drop 80 and 443 from anyone outside Cloudflare's ranges,
+#     since Docker's published ports pass by ufw; the ranges are saved in /etc/dazbee, and the
+#     dazbee-firewall service puts the rules back before Docker starts, so a reboot keeps them.
+#     Docker forwards IPv6 to the published ports through its proxy, which ufw's INPUT rules close;
 #   - 2 GB of swap in /swapfile;
 #   - the system nginx stopped and disabled, so Caddy can take port 80.
 #
@@ -24,12 +25,17 @@
 #   - an SSH key pair for deploy, its public key in ~deploy/.ssh/authorized_keys and its private key
 #     in the GitHub environment `production` (.github/workflows/deploy.yml says which secrets), then
 #     deleted from the server.
+#
+# It installs a copy of itself as /usr/local/sbin/dazbee-setup for the service, so it stands alone
+# and shares no file with deploy.sh.
 set -euo pipefail
 shopt -s inherit_errexit
 
-readonly HOME_DIR=/opt/dazbee
+readonly DAZBEE_DIR=/opt/dazbee
 readonly RANGES_DIR=/etc/dazbee
-readonly CHAIN=DAZBEE-CLOUDFLARE
+# The chain DOCKER-USER sends everything to, and the one it sends 80 and 443 from outside to.
+readonly CHAIN=DAZBEE-INBOUND
+readonly SOURCES_CHAIN=DAZBEE-CLOUDFLARE
 readonly SWAP_FILE=/swapfile
 readonly SWAP_SIZE=2G
 readonly SELF=/usr/local/sbin/dazbee-setup
@@ -44,11 +50,6 @@ write_file() {
   mv -f "$file.new" "$file"
 }
 
-# The interface the internet reaches the server on: the one the default route leaves by.
-outside_interface() {
-  ip -o route show default | awk '{ for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); exit } }'
-}
-
 # Fetches Cloudflare's IPv4 or IPv6 ranges into $RANGES_DIR, and fails, keeping the saved list, when
 # the answer isn't a list of ranges.
 fetch_ranges() {
@@ -56,6 +57,7 @@ fetch_ranges() {
   case $version in
     v4) pattern='^[0-9]{1,3}(\.[0-9]{1,3}){3}/[0-9]{1,2}$' ;;
     v6) pattern='^[0-9a-f:]+/[0-9]{1,3}$' ;;
+    *) return 1 ;;
   esac
   list=$(curl -fsS --max-time 30 "https://www.cloudflare.com/ips-$version")
   if [ -z "$list" ] || grep -Evq "$pattern" <<< "$list"; then
@@ -66,37 +68,37 @@ fetch_ranges() {
   log "firewall: $(wc -l < "$RANGES_DIR/cloudflare-ips-$version") Cloudflare $version ranges saved"
 }
 
-# Fills $CHAIN, for iptables or ip6tables, with a return for each saved range and a drop for the rest,
-# in one atomic restore, and sends 80 and 443 arriving from outside into it from DOCKER-USER. Matching
-# the connection's original port and direction leaves the containers' own connections out to 443.
+# Loads, for iptables or ip6tables, both chains in one atomic restore, and sends DOCKER-USER to the
+# first. Connections the containers open, which come in on Docker's bridges, pass; a connection
+# from outside to port 80 or 443, by its port before Docker's DNAT, goes on to the second, which
+# lets Cloudflare's ranges through and drops the rest. Replies to the containers' own connections
+# out to 443 are not the connection's original direction, so they pass.
 apply_rules() {
-  local command=$1 ranges=$2 interface=$3 port rule
-  "$command" -n -L DOCKER-USER > /dev/null 2>&1 || "$command" -N DOCKER-USER
-  "$command" -n -L "$CHAIN" > /dev/null 2>&1 || "$command" -N "$CHAIN"
+  local command=$1 ranges=$2 chain
+  for chain in DOCKER-USER "$CHAIN" "$SOURCES_CHAIN"; do
+    "$command" -n -L "$chain" > /dev/null 2>&1 || "$command" -N "$chain"
+  done
   {
     echo '*filter'
     echo ":$CHAIN - [0:0]"
-    sed "s|.*|-A $CHAIN -s & -j RETURN|" "$ranges"
-    echo "-A $CHAIN -j DROP"
+    echo ":$SOURCES_CHAIN - [0:0]"
+    echo "-A $CHAIN -i docker0 -j RETURN"
+    echo "-A $CHAIN -i br-+ -j RETURN"
+    echo "-A $CHAIN -p tcp -m conntrack --ctdir ORIGINAL --ctorigdstport 80 -j $SOURCES_CHAIN"
+    echo "-A $CHAIN -p tcp -m conntrack --ctdir ORIGINAL --ctorigdstport 443 -j $SOURCES_CHAIN"
+    sed "s|.*|-A $SOURCES_CHAIN -s & -j RETURN|" "$ranges"
+    echo "-A $SOURCES_CHAIN -j DROP"
     echo 'COMMIT'
   } | "$command-restore" --noflush
-  for port in 80 443; do
-    rule=(DOCKER-USER -i "$interface" -p tcp -m conntrack --ctorigdstport "$port" --ctdir ORIGINAL -j "$CHAIN")
-    "$command" -C "${rule[@]}" 2> /dev/null || "$command" -I "${rule[@]}"
-  done
+  "$command" -C DOCKER-USER -j "$CHAIN" 2> /dev/null || "$command" -I DOCKER-USER -j "$CHAIN"
 }
 
-# Puts the DOCKER-USER rules in place from the saved ranges, for IPv4 and IPv6.
+# Puts the DOCKER-USER rules in place from the saved ranges, for IPv4 and IPv6. Docker keeps the
+# DOCKER-USER chain it finds as it starts, and sends forwarded traffic through it first.
 firewall() {
-  local interface
-  interface=$(outside_interface)
-  [ -n "$interface" ] || {
-    echo 'no default route, so no interface to filter' >&2
-    return 1
-  }
-  apply_rules iptables "$RANGES_DIR/cloudflare-ips-v4" "$interface"
-  apply_rules ip6tables "$RANGES_DIR/cloudflare-ips-v6" "$interface"
-  log "firewall: 80 and 443 on $interface only from Cloudflare's ranges"
+  apply_rules iptables "$RANGES_DIR/cloudflare-ips-v4"
+  apply_rules ip6tables "$RANGES_DIR/cloudflare-ips-v6"
+  log "firewall: 80 and 443 into Docker only from Cloudflare's ranges"
 }
 
 setup_user() {
@@ -107,20 +109,43 @@ setup_user() {
   id -u deploy > /dev/null 2>&1 || useradd --create-home --shell /bin/bash deploy
   usermod -aG docker deploy
   install -d -o deploy -g deploy -m 700 ~deploy/.ssh
-  install -d -o deploy -g deploy -m 750 "$HOME_DIR" "$HOME_DIR/live" "$HOME_DIR/certs"
-  log "user: deploy, in the docker group, owns $HOME_DIR"
+  install -d -o deploy -g deploy -m 750 "$DAZBEE_DIR" "$DAZBEE_DIR/live" "$DAZBEE_DIR/certs"
+  log "user: deploy, in the docker group, owns $DAZBEE_DIR"
 }
 
+# The ports SSH comes in on: the one this session uses and the one sshd says; fails when it finds
+# neither, rather than guess and shut SSH out.
+ssh_ports() {
+  local ports=()
+  [ -n "${SSH_CONNECTION:-}" ] && ports+=("${SSH_CONNECTION##* }")
+  ports+=("$(sshd -T 2> /dev/null | awk '$1 == "port" { print $2; exit }')") || true
+  printf '%s\n' "${ports[@]}" | grep -E '^[0-9]+$' | sort -un | grep . || {
+    echo "no SSH port found: run setup.sh over SSH" >&2
+    return 1
+  }
+}
+
+# Allows SSH in on its ports, removes every other rule ufw has, and turns ufw on.
 setup_ufw() {
-  local port
-  # sshd's port, or 22 when sshd can't say.
-  port=$(sshd -T 2> /dev/null | awk '$1 == "port" { print $2; exit }') || port=
-  port=${port:-22}
+  local ports port rule keep
+  ports=$(ssh_ports)
   ufw default deny incoming > /dev/null
   ufw default allow outgoing > /dev/null
-  ufw allow "$port/tcp" comment SSH > /dev/null
+  for port in $ports; do
+    ufw allow "$port/tcp" comment SSH > /dev/null
+  done
+  keep=$(for port in $ports; do echo "ufw allow $port/tcp"; done)
+  while read -r rule; do
+    # ufw show added prints each rule as the command that added it.
+    rule=${rule% comment \'*\'}
+    grep -qxF "$rule" <<< "$keep" && continue
+    # The rule's words, unquoted, as ufw printed them.
+    # shellcheck disable=SC2086
+    ufw --force delete ${rule#ufw } > /dev/null
+    log "ufw: removed: $rule"
+  done < <(ufw show added | grep '^ufw ')
   ufw --force enable > /dev/null
-  log "ufw: only SSH, on $port, comes in"
+  log "ufw: only SSH, on $(paste -sd, <<< "$ports"), comes in"
 }
 
 setup_firewall() {
@@ -131,7 +156,7 @@ setup_firewall() {
   write_file "$UNIT" << EOF
 [Unit]
 Description=Dazbee: 80 and 443 into Docker only from Cloudflare's ranges
-After=docker.service
+Before=docker.service
 PartOf=docker.service
 
 [Service]
@@ -143,27 +168,30 @@ ExecStart=$SELF firewall
 WantedBy=docker.service
 EOF
   systemctl daemon-reload
-  systemctl enable dazbee-firewall.service > /dev/null 2>&1
+  systemctl --quiet enable dazbee-firewall.service
   systemctl restart dazbee-firewall.service
-  log 'firewall: dazbee-firewall puts the rules back each time Docker starts'
+  log 'firewall: dazbee-firewall puts the rules back before Docker starts'
 }
 
 setup_swap() {
   if ! swapon --show=NAME --noheadings | grep -qx "$SWAP_FILE"; then
     if [ ! -f "$SWAP_FILE" ]; then
-      fallocate -l "$SWAP_SIZE" "$SWAP_FILE"
-      chmod 600 "$SWAP_FILE"
-      mkswap "$SWAP_FILE" > /dev/null
+      rm -f "$SWAP_FILE.new"
+      fallocate -l "$SWAP_SIZE" "$SWAP_FILE.new"
+      chmod 600 "$SWAP_FILE.new"
+      mkswap "$SWAP_FILE.new" > /dev/null
+      mv "$SWAP_FILE.new" "$SWAP_FILE"
     fi
     swapon "$SWAP_FILE"
   fi
-  grep -q "^$SWAP_FILE " /etc/fstab || echo "$SWAP_FILE none swap sw 0 0" >> /etc/fstab
+  awk -v file="$SWAP_FILE" '$1 == file { found = 1 } END { exit !found }' /etc/fstab ||
+    echo "$SWAP_FILE none swap sw 0 0" >> /etc/fstab
   log "swap: $(swapon --show=SIZE --noheadings "$SWAP_FILE" | tr -d ' ') in $SWAP_FILE"
 }
 
 stop_nginx() {
   if systemctl cat nginx.service > /dev/null 2>&1; then
-    systemctl disable --now nginx.service > /dev/null 2>&1
+    systemctl --quiet disable --now nginx.service
     log 'nginx: stopped and disabled'
   else
     log 'nginx: not installed'
