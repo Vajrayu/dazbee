@@ -1,0 +1,174 @@
+// Every migration keeps the rows written under the ones before it. Each case makes its own
+// throwaway database on the Postgres `DATABASE_URL` names (the compose one locally and in CI).
+import { randomUUID } from 'node:crypto'
+import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import { migrate } from 'drizzle-orm/node-postgres/migrator'
+import pg from 'pg'
+import { afterAll, describe, expect, it } from 'vitest'
+
+import { MIGRATIONS, openDatabase } from './index.ts'
+
+const DATABASE_URL = process.env.DATABASE_URL ?? 'postgres://dazbee:dazbee-local@127.0.0.1:55432/dazbee'
+
+interface Journal {
+  entries: { tag: string; when: number }[]
+}
+
+const journal = JSON.parse(await readFile(join(MIGRATIONS, 'meta', '_journal.json'), 'utf8')) as Journal
+
+/** Databases and folders the cases made, removed once they have run. */
+const made: { databases: string[]; folders: string[] } = { databases: [], folders: [] }
+
+/**
+ * The rows every case writes under one migration and reads back after the next: one of each kind
+ * of record a person keeps, each found again by its first column.
+ */
+const ROWS = {
+  users: { id: 'user-kept', workos_user_id: 'workos-kept', email: 'ann@example.com', name: 'Ann' },
+  workspaces: { id: 'workspace-kept', name: 'Harbour' },
+  memberships: { workspace_id: 'workspace-kept', user_id: 'user-kept', role: 'owner' },
+  brands: { id: 'brand-kept', workspace_id: 'workspace-kept', name: 'Harbour Coffee' },
+  designs: {
+    id: 'design-kept',
+    workspace_id: 'workspace-kept',
+    brand_id: 'brand-kept',
+    name: 'Spring sale',
+    schema_version: 1,
+  },
+  design_saves: {
+    design_id: 'design-kept',
+    sync_id: 'sync-kept',
+    entry: '3',
+    seq: '2',
+    last_entry: '3',
+    state: Buffer.from('{"meta":{"name":"Spring sale"}}'),
+    placed: { p1: { seq: 1, author: 1 } },
+    tabs: {},
+    next_tab_id: 1,
+    versioned_seq: '0',
+  },
+} as const
+
+afterAll(async () => {
+  const admin = new pg.Client({ connectionString: DATABASE_URL })
+  await admin.connect()
+  try {
+    for (const name of made.databases) await admin.query(`drop database if exists "${name}" with (force)`)
+  } finally {
+    await admin.end()
+  }
+  await Promise.all(made.folders.map((folder) => rm(folder, { recursive: true, force: true })))
+})
+
+/** Makes an empty database beside `DATABASE_URL`'s, dropped after the file runs; its URL. */
+async function freshDatabase(): Promise<string> {
+  const name = `dazbee_migrations_${randomUUID().slice(0, 8)}`
+  const admin = new pg.Client({ connectionString: DATABASE_URL })
+  await admin.connect()
+  try {
+    await admin.query(`create database "${name}"`)
+  } finally {
+    await admin.end()
+  }
+  made.databases.push(name)
+  const url = new URL(DATABASE_URL)
+  url.pathname = `/${name}`
+  return url.toString()
+}
+
+/** A copy of the migrations folder whose journal lists only its first `count` migrations. */
+async function firstMigrations(count: number): Promise<string> {
+  const folder = await mkdtemp(join(tmpdir(), 'dazbee-migrations-'))
+  made.folders.push(folder)
+  await cp(MIGRATIONS, folder, { recursive: true })
+  await writeFile(
+    join(folder, 'meta', '_journal.json'),
+    JSON.stringify({ ...journal, entries: journal.entries.slice(0, count) }),
+  )
+  return folder
+}
+
+/** Applies the migrations `folder`'s journal lists that `url`'s database hasn't run; how many it has run in all. */
+async function applyMigrations(url: string, folder: string): Promise<number> {
+  const { db, close } = openDatabase(url, { max: 1 })
+  try {
+    await migrate(db, { migrationsFolder: folder })
+  } finally {
+    await close()
+  }
+  return withClient(url, async (client) => {
+    const result = await client.query<{ count: string }>('select count(*) from drizzle.__drizzle_migrations')
+    return Number(result.rows[0]?.count)
+  })
+}
+
+/** Runs `use` with a client on `url`'s database. */
+async function withClient<T>(url: string, use: (client: pg.Client) => Promise<T>): Promise<T> {
+  const client = new pg.Client({ connectionString: url })
+  await client.connect()
+  try {
+    return await use(client)
+  } finally {
+    await client.end()
+  }
+}
+
+/** Writes `ROWS`, naming only their columns, so a table that has since gained columns takes them too. */
+async function writeRows(client: pg.Client): Promise<void> {
+  for (const [table, row] of Object.entries(ROWS)) {
+    const columns = Object.keys(row).map((c) => `"${c}"`)
+    const values = columns.map((_, i) => `$${i + 1}`)
+    await client.query(
+      `insert into "${table}" (${columns.join(', ')}) values (${values.join(', ')})`,
+      Object.values(row),
+    )
+  }
+}
+
+/** The columns `ROWS` names, read back from each table's rows with the same first column. */
+async function readRows(client: pg.Client): Promise<Record<string, unknown[]>> {
+  const read: Record<string, unknown[]> = {}
+  for (const [table, row] of Object.entries(ROWS)) {
+    const [key = '', ...rest] = Object.keys(row)
+    const columns = [key, ...rest].map((c) => `"${c}"`)
+    // bigint columns come back as strings, so they compare with the strings written.
+    const result = await client.query(`select ${columns.join(', ')} from "${table}" where "${key}" = $1`, [
+      Object.values(row)[0],
+    ])
+    read[table] = result.rows
+  }
+  return read
+}
+
+const expectedRows = () => Object.fromEntries(Object.entries(ROWS).map(([table, row]) => [table, [row]]))
+
+describe('the migrations', () => {
+  // The migrator runs only migrations newer than the newest it has run, so one listed out of order would never run.
+  it('are listed oldest first, each made after the one before', () => {
+    const times = journal.entries.map((e) => e.when)
+    expect(times).toEqual(times.toSorted((a, b) => a - b))
+    expect(new Set(times).size).toBe(times.length)
+  })
+
+  it('apply in order to a fresh database, which then keeps a person, their workspace, brand and design', async () => {
+    const url = await freshDatabase()
+    expect(await applyMigrations(url, MIGRATIONS)).toBe(journal.entries.length)
+    await withClient(url, writeRows)
+    expect(await withClient(url, readRows)).toEqual(expectedRows())
+  }, 60_000)
+
+  // From the second migration on: each runs over rows written under the ones before it.
+  for (const [index, { tag }] of journal.entries.entries()) {
+    if (index === 0) continue
+    it(`${tag} keeps the rows written under the migrations before it`, async () => {
+      const url = await freshDatabase()
+      expect(await applyMigrations(url, await firstMigrations(index))).toBe(index)
+      await withClient(url, writeRows)
+      expect(await applyMigrations(url, await firstMigrations(index + 1))).toBe(index + 1)
+      expect(await withClient(url, readRows)).toEqual(expectedRows())
+    }, 60_000)
+  }
+})

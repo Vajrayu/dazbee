@@ -15,7 +15,7 @@ pnpm + Turborepo monorepo. `apps/` deploy (web, api, sync); `packages/` are shar
 - Exports are drawn on the CPU surface only. Never add an export path that reads pixels from WebGL.
 - Fonts and images are loaded from bytes we control, never from the system or the browser's decoder.
 - Never put server addresses or secrets in the repo.
-- Nothing is deployed: no web app, API, sync server or database runs anywhere but on this machine and in CI. A change to the tables or the design schema needs only the local reset, and no ticket or PR waits on a deploy.
+- Dazbee runs in production as ADR-0017 describes, and keeps people's work. Every change to the tables comes with a migration that keeps the data, and a change to the design schema that stored designs must be carried over for raises `SCHEMA_VERSION` with the step that carries them (the Data section of `docs/agents/code-layout.md`).
 - Before adding or moving code, read `docs/agents/code-layout.md`: which folder and file it goes in, the order inside the file, and the imports each folder may make.
 
 ## Tests
