@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto'
 
 import { and, eq } from 'drizzle-orm'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 
 import { invites, memberships, users, workspaces } from '@dazbee/db'
 import { ApiError, Invite, SignedIn, SignedOut, SignInLink, WorkspaceSummary } from '@dazbee/schema'
@@ -144,16 +144,16 @@ describe('signing in (#58)', () => {
   it('refuses a code WorkOS does not know, and a body without one, logging each with its reason and not the code', async () => {
     const logged: string[] = []
     const log = vi.spyOn(console, 'log').mockImplementation((line: string) => void logged.push(line))
+    onTestFinished(() => log.mockRestore())
     const bad = await call('POST', '/auth/callback', { body: { code: 'not-a-code' } })
     expect(bad.status).toBe(400)
     expect(ApiError.parse(bad.json).error).toMatch(/did not work/)
     expect((await call('POST', '/auth/callback', { body: {} })).status).toBe(400)
     expect(logged.map((line) => JSON.parse(line) as unknown)).toEqual([
-      expect.objectContaining({ event: 'sign-in-refused', reason: 'code-not-accepted' }),
-      { event: 'sign-in-refused', reason: 'no-code' },
+      { event: 'sign-in-refused', reason: 'code-not-accepted', error: 'Error' },
+      { event: 'sign-in-refused', reason: 'body-not-valid' },
     ])
     expect(logged.join(' ')).not.toContain('not-a-code')
-    log.mockRestore()
   })
 
   it('ends a session’s WorkOS session on sign-out, when it has one', async () => {

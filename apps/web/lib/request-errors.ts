@@ -2,8 +2,6 @@
 // route, the path without its query (which may hold a sign-in's code or an invite's token), the error's kind
 // and its digest. Its message, which may hold personal data, is left out; Next prints the error itself on
 // stderr with the same digest.
-import 'server-only'
-
 import type { Instrumentation } from 'next'
 
 export const onRequestError: Instrumentation.onRequestError = (error, request, context) => {

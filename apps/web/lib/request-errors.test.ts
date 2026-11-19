@@ -3,8 +3,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { onRequestError } from './request-errors.ts'
 
-vi.mock('server-only', () => ({}))
-
 afterEach(() => {
   vi.restoreAllMocks()
 })

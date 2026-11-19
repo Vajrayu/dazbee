@@ -24,6 +24,9 @@ import {
   STATE_COOKIE,
 } from '@/lib/server/sign-in.ts'
 
+/** An error code as WorkOS names one; anything else in a callback's `error` is not logged. */
+const WORKOS_ERROR = /^[a-z_]{1,64}$/
+
 export async function GET(request: NextRequest) {
   const jar = await cookies()
   const code = request.nextUrl.searchParams.get('code')
@@ -37,7 +40,11 @@ export async function GET(request: NextRequest) {
     return seeOther(`/login?${again}`)
   }
   if (!code) {
-    logSignIn('refused', { reason: 'no-code', workosError: request.nextUrl.searchParams.get('error') })
+    const workosError = request.nextUrl.searchParams.get('error')
+    logSignIn('refused', {
+      reason: 'no-code',
+      workosError: workosError && WORKOS_ERROR.test(workosError) ? workosError : null,
+    })
     return failed()
   }
   if (!state || state !== expected) return startAgain(request, state, expected, invitationToken, failed)
@@ -45,9 +52,10 @@ export async function GET(request: NextRequest) {
   try {
     session = await completeSignIn(code)
   } catch (e) {
-    logSignIn('unfinished', {
+    const answered = e instanceof ApiFailure
+    logSignIn(answered && e.status < 500 ? 'refused' : 'unfinished', {
       reason: 'api-failed',
-      ...(e instanceof ApiFailure ? { status: e.status, error: e.message } : { error: String(e) }),
+      ...(answered ? { status: e.status, error: e.message } : { error: String(e) }),
     })
     return failed()
   }
@@ -64,7 +72,8 @@ export async function GET(request: NextRequest) {
 
 /**
  * Starts again a sign-in this browser didn't start, leaving its code unused, so no code from elsewhere signs
- * anyone in here; one started again that still comes back without its state is refused, so it never loops.
+ * anyone in here. One started again that comes back without its state, or with another, is refused, so it
+ * never loops: its state, or the state cookie it left, begins like one started again.
  */
 async function startAgain(
   request: NextRequest,
@@ -74,7 +83,7 @@ async function startAgain(
   failed: () => NextResponse,
 ): Promise<NextResponse> {
   const why = !state ? 'no-state' : !expected ? 'not-started-here' : 'other-state'
-  if (state?.startsWith(AGAIN_STATE)) {
+  if (state?.startsWith(AGAIN_STATE) || expected?.startsWith(AGAIN_STATE)) {
     logSignIn('refused', { reason: `${why}-after-starting-again` })
     return failed()
   }

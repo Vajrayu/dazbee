@@ -13,7 +13,7 @@ import {
 } from '@dazbee/schema'
 
 import { body, type Env, error } from '../http.ts'
-import { logError, logEvent } from '../log.ts'
+import { logEvent } from '../log.ts'
 import type { InvitesProviders } from '../members/invites-provider.ts'
 import { EarlyAccessRefused, endRefusedSession } from './early-access.ts'
 import { bearerToken, readSessionToken } from './session.ts'
@@ -51,14 +51,20 @@ export function signInRoutes({
     if (!signIn) return c.json(error('Sign-in is not set up'), 404)
     const input = await body(c.req.raw, CompleteSignIn)
     if (input instanceof Response) {
-      logEvent('sign-in-refused', { reason: 'no-code' })
+      logEvent('sign-in-refused', { reason: 'body-not-valid' })
       return input
     }
     let person: SignedInPerson
     try {
       person = await signIn.provider.authenticate(input.code)
     } catch (e) {
-      logError('sign-in-refused', e, { reason: 'code-not-accepted' })
+      // Only the error's kind and WorkOS's code for it: WorkOS's description of a refused code may quote it.
+      const workosError = (e as { error?: unknown } | null)?.error
+      logEvent('sign-in-refused', {
+        reason: 'code-not-accepted',
+        error: e instanceof Error ? e.name : typeof e,
+        workosError: typeof workosError === 'string' ? workosError : undefined,
+      })
       return c.json(error('That sign-in did not work; try again'), 400)
     }
     try {

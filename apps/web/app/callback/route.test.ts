@@ -100,6 +100,7 @@ describe('GET /callback', () => {
 
       expect([response.status, response.headers.get('location')]).toEqual([303, `/login?error=${reason}`])
       expect(jar.has(SESSION_COOKIE)).toBe(false)
+      expect(JSON.parse(logged.at(-1) ?? '')).toEqual({ event: 'sign-in', outcome: 'refused', reason })
     }
   })
 
@@ -149,6 +150,31 @@ describe('GET /callback', () => {
     expect(signInLink).not.toHaveBeenCalled()
   })
 
+  it('refuses a callback with no state after a sign-in this browser started again, so it never loops', async () => {
+    jar.set(STATE_COOKIE, `${AGAIN_STATE}0123456789abcdef`)
+
+    const response = await GET(new NextRequest('http://localhost:3000/callback?code=made-up'))
+
+    expect([response.status, response.headers.get('location')]).toEqual([303, '/login?error=1'])
+    expect(signInLink).not.toHaveBeenCalled()
+    expect(JSON.parse(logged[0] ?? '')).toMatchObject({ outcome: 'refused', reason: 'no-state-after-starting-again' })
+  })
+
+  it('sends a sign-in it cannot start again back to sign in, logging why', async () => {
+    for (const [link, reason] of [
+      [Promise.reject(new Error('the API is down')), 'start-again-failed'],
+      [Promise.resolve(null), 'sign-in-not-set-up'],
+    ] as const) {
+      logged.length = 0
+      vi.mocked(signInLink).mockReturnValueOnce(link)
+
+      const response = await GET(new NextRequest('http://localhost:3000/callback?code=from-the-invite'))
+
+      expect([response.status, response.headers.get('location')]).toEqual([303, '/login?error=1'])
+      expect(JSON.parse(logged[0] ?? '')).toMatchObject({ outcome: 'unfinished', reason })
+    }
+  })
+
   it("sends a callback with no code back to sign in, logging WorkOS's error", async () => {
     jar.set(STATE_COOKIE, 'the-one-we-started')
 
@@ -163,6 +189,10 @@ describe('GET /callback', () => {
       reason: 'no-code',
       workosError: 'access_denied',
     })
+
+    await GET(new NextRequest('http://localhost:3000/callback?error=ada@example.com'))
+
+    expect(JSON.parse(logged[1] ?? '')).toMatchObject({ reason: 'no-code', workosError: null })
   })
 
   it('logs each refused sign-in with its reason, never its code or token', async () => {
