@@ -1,11 +1,11 @@
 # Production: Caddy in front of the web app, the API, the sync server and Postgres 16, on one server.
 # Run it from the folder that holds this deploy/ folder, the .env, live/ and certs/ (/opt/dazbee on
-# the server):
+# the server), with the image tags deploy/deploy.sh keeps in live/images.env read after the .env:
 #
-#   docker compose -f deploy/compose.yml --project-directory . up -d
+#   docker compose -f deploy/compose.yml --project-directory . --env-file .env --env-file live/images.env up -d
 #
 # A plain `up` starts the blue colour of the web app and API. The green colour is under the `green`
-# profile; the deploy script starts the colour that isn't live with the new image during a swap.
+# profile; deploy/deploy.sh starts the colour that isn't live with the new image during a swap.
 # Each colour's image tag comes from WEB_BLUE_TAG, WEB_GREEN_TAG, API_BLUE_TAG and API_GREEN_TAG, and
 # the sync server's from SYNC_TAG, each `latest` when unset. Settings come from the .env, whose names
 # deploy/env.example lists; each service gets only the ones it reads.
@@ -64,9 +64,8 @@ services:
       - '80:80'
       - '443:443'
     volumes:
-      # Folders, not files, so a new copy of deploy/ or of live/upstreams.caddy is what a reload reads.
+      # A folder, not a file, so a new copy of deploy/ is what a reload reads.
       - ./deploy:/etc/caddy/deploy:ro
-      - ./live:/etc/caddy/live:ro
       - ./certs:/etc/caddy/certs:ro
       - caddy-data:/data
       - caddy-config:/config

@@ -1,36 +1,55 @@
-# Caddy in front of the production stack: app.dazbee.com to the live colour of the web app,
-# sync.dazbee.com to the sync server, and http://caddy:8080, which only the containers reach, to the
-# live colour of the API. Which colour is live comes from live/upstreams.caddy, which the deploy
-# script rewrites before it reloads Caddy. Both public sites use Cloudflare's origin certificate,
-# from the certs/ folder beside compose's .env, as origin.pem and origin.key.
+# Caddy in front of the production stack: app.dazbee.com to the web app, sync.dazbee.com to the sync
+# server, and http://caddy:8080, which only the containers reach, to the API. Both public sites use
+# Cloudflare's origin certificate, from the certs/ folder beside compose's .env, as origin.pem and
+# origin.key.
+#
+# The web app and API each have a blue and a green colour, and Caddy sends to whichever runs, so a
+# deploy swaps them by starting one and stopping the other, without a reload: a reload drops the TLS
+# handshakes in flight.
 {
 	# Cloudflare's certificate is the only one Caddy serves, so it never asks a CA for one.
 	auto_https disable_certs
 	servers {
 		protocols h1 h2
 	}
+	# The health checks below ask the colour that is stopped every second; its failures aren't news.
+	log {
+		exclude http.handlers.reverse_proxy.health_checker.active
+	}
 }
 
-import /etc/caddy/live/upstreams.caddy
+# Both colours of an app, with the path its health check asks. A request goes to the first that runs
+# and answers its health check, blue before green: outside a deploy only one runs; during one, a new
+# blue takes requests once healthy, and a new green once blue stops. A request a stopping colour
+# refuses goes to the other.
+(colours) {
+	lb_policy first
+	lb_try_duration 10s
+	lb_try_interval 50ms
+	fail_duration 5s
+	health_uri {args[0]}
+	health_interval 1s
+	health_timeout 3s
+}
 
 app.dazbee.com {
 	tls /etc/caddy/certs/origin.pem /etc/caddy/certs/origin.key
-	reverse_proxy {
-		import web_upstream
+	reverse_proxy web-blue:3000 web-green:3000 {
+		import colours /login
 	}
 }
 
 sync.dazbee.com {
 	tls /etc/caddy/certs/origin.pem /etc/caddy/certs/origin.key
 	reverse_proxy sync:1234 {
-		# A reload, as at each swap of the web app or API, keeps open designs' sockets for this long.
-		# Every deploy restarts the sync server, which closes them sooner.
+		# A reload keeps open designs' sockets for this long. Every deploy restarts the sync server,
+		# which closes them sooner.
 		stream_close_delay 24h
 	}
 }
 
 http://caddy:8080 {
-	reverse_proxy {
-		import api_upstream
+	reverse_proxy api-blue:8787 api-green:8787 {
+		import colours /health
 	}
 }
