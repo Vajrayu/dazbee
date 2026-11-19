@@ -94,6 +94,7 @@ jobs:
           stack="$RUNNER_TEMP/stack"
           mkdir -p "$stack/live" "$stack/certs"
           cp -r deploy "$stack/deploy"
+          cp deploy/upstreams.caddy "$stack/live/upstreams.caddy"
           openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=app.dazbee.com             -addext subjectAltName=DNS:app.dazbee.com,DNS:sync.dazbee.com             -keyout "$stack/certs/origin.key" -out "$stack/certs/origin.pem"
           chmod 644 "$stack/certs/origin.key"
           {
@@ -107,13 +108,12 @@ jobs:
             for name in WEB_BLUE_TAG WEB_GREEN_TAG API_BLUE_TAG API_GREEN_TAG SYNC_TAG; do echo "$name=$GITHUB_SHA"; done
           } > "$stack/.env"
           cd "$stack"
-          docker compose -f deploy/compose.yml --project-directory . up -d --wait
-          # Green after blue, so the two APIs never migrate a new database at once.
-          docker compose -f deploy/compose.yml --project-directory . --profile green up -d --wait
+          # Both colours at once: the migration lock keeps their APIs from migrating the new database together.
+          docker compose -f deploy/compose.yml --project-directory . --profile blue --profile green up -d --wait
       - name: Check the stack
         working-directory: ${{ runner.temp }}/stack
         run: |
-          compose() { docker compose -f deploy/compose.yml --project-directory . --profile green "$@"; }
+          compose() { docker compose -f deploy/compose.yml --project-directory . --profile blue --profile green "$@"; }
           https() { curl -sS --resolve app.dazbee.com:443:127.0.0.1 --resolve sync.dazbee.com:443:127.0.0.1 --cacert certs/origin.pem "$@"; }
           for service in web-blue web-green api-blue api-green sync postgres; do
             read -r health ports < <(docker inspect -f '{{.State.Health.Status}} {{len .HostConfig.PortBindings}}' "$(compose ps -q "$service")")
@@ -147,7 +147,7 @@ jobs:
       - if: failure()
         working-directory: ${{ runner.temp }}/stack
         run: |
-          docker compose -f deploy/compose.yml --project-directory . --profile green logs --no-color --tail 200
+          docker compose -f deploy/compose.yml --project-directory . --profile blue --profile green logs --no-color --tail 200
           docker logs dazbee-deploy-probe || true
       - if: env.PUSH == 'true'
         uses: docker/login-action@v4

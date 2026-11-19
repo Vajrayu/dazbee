@@ -5,7 +5,7 @@
 # on the sync server, it runs deploy.sh in local mode:
 #
 #   1. <commit> twice: the web app and API swap green to blue, then back, and the tab stays open;
-#   2. an API image whose health check fails: deploy.sh fails, and the live API keeps serving;
+#   2. an API image whose health check fails: deploy.sh fails and stops it, and the live API runs on;
 #   3. a sync image whose health check fails: deploy.sh fails, and the previous sync image runs again;
 #   4. a new commit: every app swaps, the sync server restarts on it, and only the images of the
 #      commits deployed and those a container uses are kept.
@@ -33,7 +33,7 @@ commit=$2
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$stack"
 
-compose() { docker compose -f deploy/compose.yml --project-directory . --profile green "$@"; }
+compose() { docker compose -f deploy/compose.yml --project-directory . --profile blue --profile green "$@"; }
 deploy() { deploy/deploy.sh --dir "$stack" --local "$1"; }
 fail() {
   echo "FAILED: $*" >&2

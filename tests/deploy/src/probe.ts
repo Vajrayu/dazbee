@@ -1,20 +1,27 @@
 // The deploy check's probe, which CI's images job runs on the production stack while deploy.sh swaps
-// the apps. Every 100 ms it asks the web app (`/login`) and the API (`/health`) through Caddy, each on
-// a new connection, and it holds one tab open on the sync server, on a design it stores for it. It
-// says each request that failed and each close of the tab as it happens, and "the tab is open" once
-// the tab is welcomed. On SIGTERM it says how many requests it made and failed, and exits 1 when any
-// failed.
+// the apps. Every 100 ms it sends the web app and the API, through Caddy, a GET and a POST each (see
+// TARGETS), each on a new connection, and it holds one tab open on the sync server, on a design it
+// stores for it. It says each request that failed (no answer, or not the answer expected) and each
+// close of the tab as it happens, and "the tab is open" once the tab is welcomed. On SIGTERM it says
+// how many requests it made and failed, and exits 1 when any failed.
 //
 // Settings: DATABASE_URL and SYNC_TOKEN_SECRET as the sync server has them, and WEB_URL, API_URL and
 // SYNC_URL, the addresses it asks through Caddy.
 import { randomUUID } from 'node:crypto'
-import { get as httpGet, type IncomingMessage } from 'node:http'
-import { get as httpsGet } from 'node:https'
+import { type IncomingMessage, request as httpRequest } from 'node:http'
+import { request as httpsRequest } from 'node:https'
 
 import { brands, createDesignSave, designs, openDatabase, workspaces } from '@dazbee/db'
 import { firstSaved } from '@dazbee/doc/sync'
 import { DESIGN_PARAM, type DesignRecords, PROTOCOL, SCHEMA_VERSION, TAB_VERSION_PARAM } from '@dazbee/schema'
 import { signSyncToken } from '@dazbee/sync-token'
+
+interface Target {
+  method: 'GET' | 'POST'
+  url: string
+  /** The status a request answered in full gets. */
+  expect: number
+}
 
 interface Count {
   made: number
@@ -32,10 +39,22 @@ const setting = (name: string) => {
 
 const databaseUrl = setting('DATABASE_URL')
 const secret = setting('SYNC_TOKEN_SECRET')
-const targets = { web: `${setting('WEB_URL')}/login`, api: `${setting('API_URL')}/health` }
+const webUrl = setting('WEB_URL')
+const apiUrl = setting('API_URL')
 const syncUrl = setting('SYNC_URL')
 
-const counts: Record<keyof typeof targets, Count> = { web: { made: 0, failed: 0 }, api: { made: 0, failed: 0 } }
+/** What it asks: pages and checks that read, and a sign-out and a request to leave a workspace, which, without a session, change nothing. */
+const TARGETS: Record<string, Target> = {
+  'web GET': { method: 'GET', url: `${webUrl}/login`, expect: 200 },
+  'web POST': { method: 'POST', url: `${webUrl}/logout`, expect: 303 },
+  'api GET': { method: 'GET', url: `${apiUrl}/health`, expect: 200 },
+  'api POST': { method: 'POST', url: `${apiUrl}/workspaces/deploy-check/leave`, expect: 401 },
+}
+
+const counts = Object.fromEntries(Object.keys(TARGETS).map((name) => [name, { made: 0, failed: 0 }])) as Record<
+  string,
+  Count
+>
 const run = `deploy-check-${randomUUID().slice(0, 8)}`
 const member = { workspaceId: `workspace-${run}`, userId: `user-${run}`, role: 'editor' as const, name: 'Probe' }
 
@@ -69,22 +88,24 @@ async function storeDesign(): Promise<string> {
   return designId
 }
 
-/** Asks `target` once on a new connection; counts a 200 as answered and anything else as failed. */
-function ask(target: keyof typeof targets) {
-  const url = targets[target]
-  const count = counts[target]
+/** Sends one request on a new connection; counts any answer but the one expected as failed. */
+function ask(name: string) {
+  const { method, url, expect } = TARGETS[name] as Target
+  const count = counts[name] as Count
   count.made++
   const failed = (why: string) => {
     count.failed++
-    say(`${target}: ${url} failed: ${why}`)
+    say(`${name} ${url} failed: ${why}`)
   }
   const answered = (response: IncomingMessage) => {
     response.resume()
-    if (response.statusCode !== 200) failed(`answered ${response.statusCode}`)
+    if (response.statusCode !== expect) failed(`answered ${response.statusCode}`)
   }
-  const request = (url.startsWith('https:') ? httpsGet : httpGet)(url, { agent: false }, answered)
+  const send = url.startsWith('https:') ? httpsRequest : httpRequest
+  const request = send(url, { method, agent: false }, answered)
   request.setTimeout(REQUEST_TIMEOUT_MS, () => request.destroy(new Error('no answer in time')))
   request.on('error', (error) => failed(error.message))
+  request.end()
 }
 
 /** Opens a tab on the design and keeps it open, answering the server's token requests. */
@@ -106,17 +127,13 @@ function openTab(designId: string) {
 
 const designId = await storeDesign()
 openTab(designId)
-const asking = setInterval(() => {
-  ask('web')
-  ask('api')
-}, EVERY_MS)
+const asking = setInterval(() => Object.keys(TARGETS).forEach(ask), EVERY_MS)
 
 process.once('SIGTERM', () => {
   clearInterval(asking)
   // Requests still out get their time to answer.
   setTimeout(() => {
-    for (const [target, { made, failed }] of Object.entries(counts))
-      say(`${target}: ${made} requests, ${failed} failed`)
-    process.exit(counts.web.failed + counts.api.failed > 0 ? 1 : 0)
+    for (const [name, { made, failed }] of Object.entries(counts)) say(`${name}: ${made} requests, ${failed} failed`)
+    process.exit(Object.values(counts).some((count) => count.failed > 0) ? 1 : 0)
   }, REQUEST_TIMEOUT_MS + 500)
 })

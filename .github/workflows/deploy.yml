@@ -33,28 +33,42 @@ jobs:
     env:
       COMMIT: ${{ github.event_name == 'workflow_dispatch' && inputs.commit || github.event.workflow_run.head_sha }}
     steps:
+      # After CI, only main's newest commit is deployed: a CI run started again later for an older
+      # commit would otherwise put it back live.
       - name: Check the commit
+        id: commit
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           [[ $COMMIT =~ ^[0-9a-f]{40}$ ]] || {
             echo 'The commit must be a full commit id: 40 lowercase hex digits.' >&2
             exit 1
           }
+          if [ "$GITHUB_EVENT_NAME" = workflow_run ]; then
+            tip=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)
+            if [ "$tip" != "$COMMIT" ]; then
+              echo "::notice::$COMMIT is no longer main's newest commit, so it is not deployed."
+              echo skip=true >> "$GITHUB_OUTPUT"
+            fi
+          fi
       # The deploy/ folder of the commit deployed, so a rollback runs with its own compose file.
-      - uses: actions/checkout@v7
+      - if: steps.commit.outputs.skip != 'true'
+        uses: actions/checkout@v7
         with:
           ref: ${{ env.COMMIT }}
       # The server's address, key and host key are secrets, so the logs show them masked; ssh names
       # the server only as `server`, and says nothing below an error.
-      - name: Connect to the server
+      - if: steps.commit.outputs.skip != 'true'
+        name: Connect to the server
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
           install -d -m 700 ~/.ssh
-          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          echo "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          echo "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
           cat > ~/.ssh/config << EOF
           Host server
             HostName $DEPLOY_HOST
@@ -63,12 +77,23 @@ jobs:
             IdentitiesOnly yes
             StrictHostKeyChecking yes
             LogLevel ERROR
+            ServerAliveInterval 15
           EOF
       # Copies deploy/ over the server's copy file by file: Caddy mounts the folder, so it stays.
-      - name: Copy deploy/
+      - if: steps.commit.outputs.skip != 'true'
+        name: Copy deploy/
         run: tar -C deploy -cf - . | ssh server 'mkdir -p /opt/dazbee/deploy && tar -xf - -C /opt/dazbee/deploy'
-      - name: Deploy
+      # deploy.sh runs on the server apart from this connection, so a cancelled job or a dropped
+      # connection never stops it halfway. This step follows its log until it exits, then ends with its
+      # status.
+      - if: steps.commit.outputs.skip != 'true'
+        name: Deploy
         run: |
-          # The commit, checked above, is meant to expand here, on the runner.
+          # The commit, checked above, and the process id are meant to expand here, on the runner.
           # shellcheck disable=SC2029
-          ssh server "/opt/dazbee/deploy/deploy.sh $COMMIT"
+          pid=$(ssh server "cd /opt/dazbee && mkdir -p live && rm -f live/deploy.status && : > live/deploy.log &&
+            { setsid bash -c 'deploy/deploy.sh $COMMIT > live/deploy.log 2>&1; echo \$? > live/deploy.status' > /dev/null 2>&1 < /dev/null & echo \$!; }")
+          [[ $pid =~ ^[0-9]+$ ]]
+          # shellcheck disable=SC2029
+          ssh server "tail -n +1 -f --pid=$pid /opt/dazbee/live/deploy.log"
+          exit "$(ssh server 'cat /opt/dazbee/live/deploy.status')"

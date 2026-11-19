@@ -8,23 +8,25 @@
 #   --dir <folder>  the folder compose runs in; /opt/dazbee unless given
 #   --local         uses the commit's images already on this machine instead of pulling them
 #
-# The web app and API swap blue-green. Caddy sends each request to the first colour that runs and
-# answers its health check, blue before green (deploy/Caddyfile), so a swap needs no reload: the
-# colour that isn't live starts on the commit's image, both run while Caddy's health check finds the
-# new one and requests on the old one end, then the old one stops. The sync server is stopped with
-# SIGTERM, which folds every open design and closes each tab to reconnect, then the new one starts;
-# if it isn't healthy in time, the previous image starts again. A failed health check stops the new
-# container, leaves the previous version of that app serving and exits non-zero; apps swapped before
-# it stay on the commit. Caddy is reloaded only when deploy/Caddyfile changed since the last deploy.
+# The web app and API swap blue-green: the colour that isn't live starts on the commit's image; once
+# it is healthy, live/upstreams.caddy names it and the router (deploy/router.Caddyfile) is reloaded,
+# so every new request goes to it; the requests the old colour holds end, and the old colour stops.
+# The sync server is stopped with SIGTERM, which folds every open design and closes each tab to
+# reconnect, then the new one starts; if it isn't healthy in time, the previous image starts again. A
+# failed health check stops the new container, leaves the previous version of that app serving and
+# exits non-zero; apps swapped before it stay on the commit. Caddy, which holds the TLS connections,
+# is reloaded only when deploy/Caddyfile changed since the last deploy.
 #
 # What it changes lives in live/, which copying deploy/ over never touches:
-#   live/web, live/api   the live colour of each, blue or green
-#   live/images.env      each container's image tag, which compose reads after the .env
-#   live/deployed        each app's deployed commit
-#   live/history         the commits deployed, oldest first
-#   live/Caddyfile       the Caddyfile Caddy last loaded
+#   live/web, live/api     the live colour of each, blue or green
+#   live/upstreams.caddy   the live colours as the router imports them
+#   live/images.env        each container's image tag, which compose reads after the .env
+#   live/deployed          each app's deployed commit
+#   live/history           the commits deployed, oldest first
+#   live/Caddyfile         the Caddyfile Caddy last loaded
 # It keeps each app's images of the last three commits deployed, and any a container uses, and
-# removes the rest.
+# removes the rest. It starts Caddy, the router and Postgres when they don't run but never recreates
+# them: a change to their services in compose.yml is applied by hand, with compose's `up -d <service>`.
 set -euo pipefail
 shopt -s inherit_errexit
 
@@ -32,8 +34,7 @@ readonly REGISTRY=ghcr.io/dazbee-ai
 readonly APPS=(api sync web)
 # How long a new container has to pass its health check.
 readonly HEALTH_SECONDS=60
-# How long both colours run before the old one stops: Caddy's health check, every second, finds the
-# new one, and requests on the old one end.
+# How long the old colour runs once the router sends to the new one, for the requests it holds to end.
 readonly DRAIN_SECONDS=5
 readonly KEEP_IMAGES=3
 
@@ -49,11 +50,11 @@ usage() {
 log() { printf '%s  %s\n' "$(date -u +%H:%M:%S)" "$*"; }
 
 # Compose over the production file, with the image tags this script keeps after the .env's settings.
-# The green profile lets every command name a green colour; each one here names its services.
+# The colours' profiles let every command name a colour; each one here names its services.
 compose() {
   local env_files=(--env-file .env)
   [ -f live/images.env ] && env_files+=(--env-file live/images.env)
-  docker compose -f deploy/compose.yml --project-directory . "${env_files[@]}" --profile green "$@"
+  docker compose -f deploy/compose.yml --project-directory . "${env_files[@]}" --profile blue --profile green "$@"
 }
 
 # Writes `file` from stdin through a temporary file beside it, so a reader never sees half of it.
@@ -72,12 +73,6 @@ running_tag() {
   id=$(compose ps -aq "$1")
   [ -n "$id" ] || return 0
   docker inspect -f '{{.Config.Image}}' "$id" | sed 's/.*://'
-}
-
-# The tag live/images.env holds for a service's setting; nothing when it holds none.
-kept_tag() {
-  [ -f live/images.env ] || return 0
-  sed -n "s/^$1=//p" live/images.env
 }
 
 # Sets one tag in live/images.env, keeping the others.
@@ -110,6 +105,23 @@ live_colour() {
 
 other_colour() { [ "$1" = blue ] && echo green || echo blue; }
 
+# Writes live/upstreams.caddy for the given web and API colours.
+write_upstreams() {
+  write_file live/upstreams.caddy << EOF
+# The live colour of the web app and of the API, which the router imports. deploy.sh writes this
+# file at each swap.
+(web_upstream) {
+	to web-$1:3000
+}
+
+(api_upstream) {
+	to api-$2:8787
+}
+EOF
+}
+
+reload_router() { compose exec -T router caddy reload --config /etc/caddy/deploy/router.Caddyfile --adapter caddyfile; }
+
 # Reloads Caddy when deploy/Caddyfile differs from the one it last loaded.
 apply_caddyfile() {
   cmp -s deploy/Caddyfile live/Caddyfile && return 0
@@ -135,7 +147,7 @@ start_healthy() {
 
 # Swaps `web` or `api` to the commit, blue-green.
 swap() {
-  local app=$1 live next
+  local app=$1 live next web api
   live=$(live_colour "$app")
   next=$(other_colour "$live")
   log "$app: starting $next on $commit, while $live serves"
@@ -146,8 +158,20 @@ swap() {
     return 1
   fi
   keep_tag "$(tag_setting "$app-$next")" "$commit"
+  web=$(live_colour web)
+  api=$(live_colour api)
+  if [ "$app" = web ]; then web=$next; else api=$next; fi
+  cp live/upstreams.caddy live/upstreams.caddy.previous
+  write_upstreams "$web" "$api"
+  if ! reload_router; then
+    log "$app: the router did not take $next; stopping it, and $live keeps serving"
+    write_file live/upstreams.caddy < live/upstreams.caddy.previous
+    compose stop "$app-$next" || true
+    return 1
+  fi
   echo "$next" | write_file "live/$app"
-  log "$app: $next is healthy; stopping $live in ${DRAIN_SECONDS}s"
+  rm -f live/upstreams.caddy.previous
+  log "$app: the router sends to $next; stopping $live in ${DRAIN_SECONDS}s"
   sleep "$DRAIN_SECONDS"
   compose stop "$app-$live"
   record_deployed "$app"
@@ -245,10 +269,11 @@ for app in "${APPS[@]}"; do
 done
 
 start_images_env
-# Caddy and Postgres start when they don't run; a running one is left as it is. A Caddy that starts
-# here loads deploy/Caddyfile as it starts.
+[ -f live/upstreams.caddy ] || write_upstreams "$(live_colour web)" "$(live_colour api)"
+# Caddy, the router and Postgres start when they don't run; a running one is left as it is. A Caddy
+# that starts here loads deploy/Caddyfile as it starts.
 caddy_ran=$(compose ps -q --status running caddy)
-compose up -d --no-recreate --wait caddy postgres
+compose up -d --no-recreate --wait caddy router postgres
 [ -n "$caddy_ran" ] || write_file live/Caddyfile < deploy/Caddyfile
 apply_caddyfile
 

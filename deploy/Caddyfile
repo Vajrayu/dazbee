@@ -3,39 +3,29 @@
 # Cloudflare's origin certificate, from the certs/ folder beside compose's .env, as origin.pem and
 # origin.key.
 #
-# The web app and API each have a blue and a green colour, and Caddy sends to whichever runs, so a
-# deploy swaps them by starting one and stopping the other, without a reload: a reload drops the TLS
-# handshakes in flight.
+# The web app and API go through the router (deploy/router.Caddyfile), which sends to their live
+# colours and is reloaded at each swap. This Caddy is not: a reload drops the TLS handshakes in
+# flight. It opens a connection to the router for each request, since a reload closes the ones kept
+# open between requests.
 {
 	# Cloudflare's certificate is the only one Caddy serves, so it never asks a CA for one.
 	auto_https disable_certs
 	servers {
 		protocols h1 h2
 	}
-	# The health checks below ask the colour that is stopped every second; its failures aren't news.
-	log {
-		exclude http.handlers.reverse_proxy.health_checker.active
-	}
 }
 
-# Both colours of an app, with the path its health check asks. A request goes to the first that runs
-# and answers its health check, blue before green: outside a deploy only one runs; during one, a new
-# blue takes requests once healthy, and a new green once blue stops. A request a stopping colour
-# refuses goes to the other.
-(colours) {
-	lb_policy first
-	lb_try_duration 10s
-	lb_try_interval 50ms
-	fail_duration 5s
-	health_uri {args[0]}
-	health_interval 1s
-	health_timeout 3s
+# Sends to the router on a new connection each time.
+(router) {
+	transport http {
+		keepalive off
+	}
 }
 
 app.dazbee.com {
 	tls /etc/caddy/certs/origin.pem /etc/caddy/certs/origin.key
-	reverse_proxy web-blue:3000 web-green:3000 {
-		import colours /login
+	reverse_proxy router:3000 {
+		import router
 	}
 }
 
@@ -49,7 +39,7 @@ sync.dazbee.com {
 }
 
 http://caddy:8080 {
-	reverse_proxy api-blue:8787 api-green:8787 {
-		import colours /health
+	reverse_proxy router:8787 {
+		import router
 	}
 }
