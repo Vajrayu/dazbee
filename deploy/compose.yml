@@ -5,7 +5,9 @@
 #   docker compose -f deploy/compose.yml --project-directory . --env-file .env --env-file live/images.env up -d
 #
 # A plain `up` starts Caddy, the router, Postgres and the sync server. The web app's and API's colours
-# are under the `blue` and `green` profiles, and only deploy/deploy.sh starts and stops them.
+# are under the `blue` and `green` profiles, and only deploy/deploy.sh starts and stops them. The
+# router needs live/upstreams.caddy, which deploy.sh writes; on a new server, start everything with
+# deploy.sh, or copy deploy/upstreams.caddy into live/ first.
 # Each colour's image tag comes from WEB_BLUE_TAG, WEB_GREEN_TAG, API_BLUE_TAG and API_GREEN_TAG, and
 # the sync server's from SYNC_TAG, each `latest` when unset. Settings come from the .env, whose names
 # deploy/env.example lists; each service gets only the ones it reads.

@@ -6,6 +6,9 @@
 	auto_https off
 	servers {
 		protocols h1
+		# Caddy in front says how each request came, https for the public sites, and the router passes
+		# that on, so the web app sets its cookies Secure.
+		trusted_proxies static private_ranges
 	}
 }
 

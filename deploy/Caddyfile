@@ -15,8 +15,15 @@
 	}
 }
 
-# Sends to the router on a new connection each time.
+# Sends to the router on a new connection each time, and waits a moment for a router that is starting.
+# A request the router closed unanswered is sent again whatever its method: a reload of the router
+# now and then closes a connection it has just accepted, before it reads the request, while one it
+# has passed on is always answered, so no request reaches an app twice.
 (router) {
+	lb_try_duration 5s
+	lb_retry_match {
+		method GET HEAD POST PUT PATCH DELETE OPTIONS
+	}
 	transport http {
 		keepalive off
 	}

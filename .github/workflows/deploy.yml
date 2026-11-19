@@ -29,7 +29,7 @@ jobs:
       vars.DEPLOY_ENABLED == 'true' && (github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'))
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 40
     env:
       COMMIT: ${{ github.event_name == 'workflow_dispatch' && inputs.commit || github.event.workflow_run.head_sha }}
     steps:
@@ -79,21 +79,31 @@ jobs:
             LogLevel ERROR
             ServerAliveInterval 15
           EOF
-      # Copies deploy/ over the server's copy file by file: Caddy mounts the folder, so it stays.
+      # A deploy still running on the server, after a job that was cancelled or lost its connection,
+      # finishes first.
+      - if: steps.commit.outputs.skip != 'true'
+        name: Wait for a deploy still running
+        run: ssh server 'mkdir -p /opt/dazbee/live && flock -w 900 /opt/dazbee/live/deploy.lock true'
+      # deploy.sh puts this copy in place over deploy/ once no other deploy runs.
       - if: steps.commit.outputs.skip != 'true'
         name: Copy deploy/
-        run: tar -C deploy -cf - . | ssh server 'mkdir -p /opt/dazbee/deploy && tar -xf - -C /opt/dazbee/deploy'
+        run: |
+          tar -C deploy -cf - . |
+            ssh server 'rm -rf /opt/dazbee/deploy.next && mkdir /opt/dazbee/deploy.next && tar -xf - -C /opt/dazbee/deploy.next'
       # deploy.sh runs on the server apart from this connection, so a cancelled job or a dropped
-      # connection never stops it halfway. This step follows its log until it exits, then ends with its
-      # status.
+      # connection never stops it halfway. It logs to a file of this run's own in live/deploys/, the
+      # last 20 kept; this step follows it until deploy.sh exits, then ends with its status.
       - if: steps.commit.outputs.skip != 'true'
         name: Deploy
         run: |
-          # The commit, checked above, and the process id are meant to expand here, on the runner.
+          run="live/deploys/$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          # The commit, checked above, the run's files and the process id are meant to expand here, on the runner.
           # shellcheck disable=SC2029
-          pid=$(ssh server "cd /opt/dazbee && mkdir -p live && rm -f live/deploy.status && : > live/deploy.log &&
-            { setsid bash -c 'deploy/deploy.sh $COMMIT > live/deploy.log 2>&1; echo \$? > live/deploy.status' > /dev/null 2>&1 < /dev/null & echo \$!; }")
+          pid=$(ssh server "cd /opt/dazbee && mkdir -p live/deploys && : > $run.log &&
+            { ls -t live/deploys/* | tail -n +41 | xargs -r rm --;
+              setsid bash -c 'bash deploy.next/deploy.sh --from deploy.next $COMMIT > $run.log 2>&1; echo \$? > $run.status' > /dev/null 2>&1 < /dev/null & echo \$!; }")
           [[ $pid =~ ^[0-9]+$ ]]
           # shellcheck disable=SC2029
-          ssh server "tail -n +1 -f --pid=$pid /opt/dazbee/live/deploy.log"
-          exit "$(ssh server 'cat /opt/dazbee/live/deploy.status')"
+          ssh server "tail -n +1 -f --pid=$pid /opt/dazbee/$run.log"
+          # shellcheck disable=SC2029
+          exit "$(ssh server "cat /opt/dazbee/$run.status")"

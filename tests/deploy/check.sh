@@ -68,8 +68,9 @@ compose stop web-green api-green
 
 # Caddy reloads when the Caddyfile changed since the last deploy, and a reload drops the TLS handshakes
 # in flight, so the first deploy, which loads it, runs before the probe.
-step "0. $commit, the first deploy"
-deploy "$commit"
+step "0. $commit, the first deploy, which puts this checkout's deploy/ in place as the workflow does"
+"$repo/deploy/deploy.sh" --dir "$stack" --from "$repo/deploy" --local "$commit"
+cmp "$repo/deploy/deploy.sh" deploy/deploy.sh || fail 'deploy/ was not put in place'
 cmp deploy/Caddyfile live/Caddyfile || fail 'live/Caddyfile is not the Caddyfile Caddy loaded'
 expect_live web green
 expect_live api green

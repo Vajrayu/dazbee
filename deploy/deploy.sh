@@ -3,10 +3,12 @@
 # the web app. Run it from anywhere on the server; it works in the folder that holds deploy/, the
 # .env, live/ and certs/.
 #
-#   deploy/deploy.sh [--dir <folder>] [--local] <commit>
+#   deploy/deploy.sh [--dir <folder>] [--from <folder>] [--local] <commit>
 #
-#   --dir <folder>  the folder compose runs in; /opt/dazbee unless given
-#   --local         uses the commit's images already on this machine instead of pulling them
+#   --dir <folder>   the folder compose runs in; /opt/dazbee unless given
+#   --from <folder>  a new copy of deploy/, put in place file by file once no other deploy runs
+#                    (Caddy and the router mount deploy/ as a folder, so it stays)
+#   --local          uses the commit's images already on this machine instead of pulling them
 #
 # The web app and API swap blue-green: the colour that isn't live starts on the commit's image; once
 # it is healthy, live/upstreams.caddy names it and the router (deploy/router.Caddyfile) is reloaded,
@@ -18,8 +20,8 @@
 # is reloaded only when deploy/Caddyfile changed since the last deploy.
 #
 # What it changes lives in live/, which copying deploy/ over never touches:
-#   live/web, live/api     the live colour of each, blue or green
-#   live/upstreams.caddy   the live colours as the router imports them
+#   live/upstreams.caddy   the live colours as the router imports them, which decide which runs on
+#   live/web, live/api     the live colour of each, blue or green, as a record
 #   live/images.env        each container's image tag, which compose reads after the .env
 #   live/deployed          each app's deployed commit
 #   live/history           the commits deployed, oldest first
@@ -39,11 +41,12 @@ readonly DRAIN_SECONDS=5
 readonly KEEP_IMAGES=3
 
 dir=/opt/dazbee
+from=
 pull=true
 commit=
 
 usage() {
-  echo 'usage: deploy.sh [--dir <folder>] [--local] <commit>' >&2
+  echo 'usage: deploy.sh [--dir <folder>] [--from <folder>] [--local] <commit>' >&2
   exit 2
 }
 
@@ -90,14 +93,14 @@ start_images_env() {
   done | sort | write_file live/images.env
 }
 
-# The live colour of `web` or `api`; blue until a deploy records one.
+# The live colour of `web` or `api`, as live/upstreams.caddy sends to it; blue before the first deploy.
 live_colour() {
   local colour=blue
-  [ -f "live/$1" ] && colour=$(< "live/$1")
+  [ -f live/upstreams.caddy ] && colour=$(sed -n "s/^[[:space:]]*to $1-\([a-z]*\):.*/\1/p" live/upstreams.caddy)
   case $colour in
     blue | green) echo "$colour" ;;
     *)
-      echo "live/$1 names no colour: $colour" >&2
+      echo "live/upstreams.caddy names no colour for $1: $colour" >&2
       return 1
       ;;
   esac
@@ -232,6 +235,11 @@ while [ $# -gt 0 ]; do
       dir=$2
       shift 2
       ;;
+    --from)
+      [ $# -ge 2 ] || usage
+      from=$(cd "$2" && pwd)
+      shift 2
+      ;;
     --local)
       pull=false
       shift
@@ -254,6 +262,10 @@ flock -n 9 || {
   echo 'another deploy is running' >&2
   exit 1
 }
+if [ -n "$from" ]; then
+  mkdir -p deploy
+  cp -R "$from/." deploy/
+fi
 
 for app in "${APPS[@]}"; do
   image=$REGISTRY/dazbee-$app:$commit
