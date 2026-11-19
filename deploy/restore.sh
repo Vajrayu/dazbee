@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Restores a backup that deploy/backup.sh made from the backups bucket into a new database, and checks
-# each table's row count against the backup's .counts. Run it as the deploy user, or as root.
+# each table's row count against the backup's .counts. Run it as the deploy user, which owns what it
+# writes.
 #
 #   deploy/restore.sh [--dir <folder>] [--live] <backup> <database>
 #
@@ -97,6 +98,7 @@ else
   $live && fail "--live replaces only $LIVE_DATABASE, not $database"
 fi
 
+[ "$(id -u)" != 0 ] || fail 'run restore.sh as the deploy user: sudo -u deploy deploy/restore.sh ...'
 cd "$dir"
 mkdir -p live
 if $live; then
@@ -112,7 +114,7 @@ stamp=$(date -u +%Y%m%d_%H%M%S)
 target=$database
 if $live; then
   target=${LIVE_DATABASE}_restore_$stamp
-  connected=$(sql <<< "SELECT count(*) FROM pg_stat_activity WHERE datname = '$LIVE_DATABASE'")
+  connected=$(sql <<< "SELECT count(*) FROM pg_stat_activity WHERE datname = '$LIVE_DATABASE' AND backend_type = 'client backend'")
   [ "$connected" = 0 ] || fail "$connected connections to $LIVE_DATABASE: stop the API and the sync server first"
 fi
 ! exists "$target" || fail "$target already exists: drop it, or restore into another database"

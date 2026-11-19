@@ -17,7 +17,8 @@
 #   - 2 GB of swap in /swapfile;
 #   - the system nginx stopped and disabled, so Caddy can take port 80;
 #   - the dazbee-backup timer, which runs deploy/backup.sh each night, from dazbee-backup.service and
-#     .timer beside this script, so run it from /opt/dazbee/deploy, where each deploy copies them.
+#     .timer beside this script: run it from /opt/dazbee/deploy, where each deploy copies them, so
+#     on a new server run it again after the first deploy.
 #
 # Then, by hand, once per server:
 #   - /opt/dazbee/.env from deploy/env.example, owned root:deploy, mode 640;
@@ -113,6 +114,7 @@ setup_user() {
   usermod -aG docker deploy
   install -d -o deploy -g deploy -m 700 ~deploy/.ssh
   install -d -o deploy -g deploy -m 750 "$DAZBEE_DIR" "$DAZBEE_DIR/live" "$DAZBEE_DIR/certs"
+  install -d -o deploy -g deploy -m 700 "$DAZBEE_DIR/backups"
   log "user: deploy, in the docker group, owns $DAZBEE_DIR"
 }
 
@@ -192,15 +194,18 @@ setup_swap() {
   log "swap: $(swapon --show=SIZE --noheadings "$SWAP_FILE" | tr -d ' ') in $SWAP_FILE"
 }
 
-# Installs the backup's service and timer from beside this script, and starts the timer.
+# Installs the backup's service and timer from beside this script, and starts the timer; without
+# them, as on a new server before its first deploy, it says to run setup.sh again from deploy/.
 setup_backups() {
   local here unit
   here=$(dirname "$(realpath "${BASH_SOURCE[0]}")")
   for unit in "${BACKUP_UNITS[@]}"; do
     [ -f "$here/$unit" ] || {
-      echo "no $unit beside setup.sh: run it from $DAZBEE_DIR/deploy" >&2
-      return 1
+      log "backups: NOT SET UP, no $unit beside setup.sh: run $DAZBEE_DIR/deploy/setup.sh after the first deploy"
+      return 0
     }
+  done
+  for unit in "${BACKUP_UNITS[@]}"; do
     install -m 644 "$here/$unit" "/etc/systemd/system/$unit"
   done
   systemctl daemon-reload

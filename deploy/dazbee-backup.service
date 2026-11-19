@@ -1,10 +1,13 @@
 # Backs up the production database to the backups bucket with deploy/backup.sh, as the deploy user.
-# deploy/setup.sh installs it; dazbee-backup.timer starts it each night.
+# deploy/setup.sh installs it; dazbee-backup.timer starts it each night. A failed run, as when it
+# starts with the server before Postgres is ready, is tried again after 10 minutes, up to 3 times.
 [Unit]
 Description=Dazbee: back up the database to the backups bucket
 Requires=docker.service
 After=docker.service network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=2h
+StartLimitBurst=4
 
 [Service]
 Type=oneshot
@@ -12,3 +15,5 @@ User=deploy
 Group=deploy
 ExecStart=/bin/bash /opt/dazbee/deploy/backup.sh
 TimeoutStartSec=3h
+Restart=on-failure
+RestartSec=10min

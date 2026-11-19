@@ -256,10 +256,10 @@ done
 
 cd "$dir"
 [ -d live ] || mkdir live
-# One deploy at a time on this machine.
+# One deploy at a time on this machine: it waits for one in flight, or for a backup's dump, to end.
 exec 9> live/deploy.lock
-flock -n 9 || {
-  echo 'another deploy is running' >&2
+flock -w 900 9 || {
+  echo 'another deploy, or a backup, still runs after 900s' >&2
   exit 1
 }
 if [ -n "$from" ]; then
