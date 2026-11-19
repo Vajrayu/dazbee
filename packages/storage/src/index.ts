@@ -99,7 +99,10 @@ export function openStorage(settings: StorageSettings) {
       url.searchParams.set('prefix', prefix)
       url.searchParams.set('max-keys', String(pageSize))
       if (token) url.searchParams.set('continuation-token', token)
-      const page = await (await send(url.toString())).text()
+      const response = await send(url.toString())
+      // A missing bucket is no empty folder.
+      if (response.status === 404) throw new StorageError(404, `storage has no bucket ${settings.bucket}`)
+      const page = await response.text()
       keys.push(...[...page.matchAll(/<Key>([^<]*)<\/Key>/g)].map((match) => xmlText(match[1] ?? '')))
       const next = /<IsTruncated>true<\/IsTruncated>/.test(page) && /<NextContinuationToken>([^<]*)</.exec(page)
       token = next ? xmlText(next[1] ?? '') : null

@@ -375,8 +375,8 @@ describe('deleteMyAccount', () => {
   it('deletes the account with the email typed, forgets the session alone and opens sign-in saying so', async () => {
     answer = { status: 204, body: null }
 
-    expect(await deleteMyAccount('workspace-1', 'Ada@Example.com')).toBeUndefined()
-    expect(asked).toEqual([{ method: 'DELETE', path: '/me', body: { email: 'Ada@Example.com' } }])
+    expect(await deleteMyAccount('workspace-1', { email: 'Ada@Example.com', deletes: ['w-1'] })).toBeUndefined()
+    expect(asked).toEqual([{ method: 'DELETE', path: '/me', body: { email: 'Ada@Example.com', deletes: ['w-1'] } }])
     expect(picked.deleted).toEqual(['dazbee_session'])
     expect(redirect).toHaveBeenCalledWith('/login?deleted=1')
   })
@@ -384,16 +384,24 @@ describe('deleteMyAccount', () => {
   it("says why the API refused, in the person's words, and draws Settings again", async () => {
     picked.locale = 'ar'
     answer = { status: 400, body: { error: 'Type your account’s email to delete it', handOver: [] } }
-    expect(await deleteMyAccount('workspace-1', 'someone@example.com')).toBe(
+    expect(await deleteMyAccount('workspace-1', { email: 'someone@example.com', deletes: [] })).toBe(
       'هذا ليس البريد الإلكتروني لحسابك. اكتبه كما يظهر.',
     )
     picked.locale = undefined
     answer = { status: 409, body: { error: 'Hand over Owner first', handOver: [{ id: 'w-2', name: 'Team' }] } }
-    expect(await deleteMyAccount('workspace-1', 'ada@example.com')).toBe(
-      'Hand over Owner of the workspaces below before you delete your account.',
+    expect(await deleteMyAccount('workspace-1', { email: 'ada@example.com', deletes: [] })).toBe(
+      'What deleting your account deletes has changed. Read it again below.',
     )
     expect(revalidatePath).toHaveBeenCalledWith('/w/workspace-1/settings')
     expect(redirect).not.toHaveBeenCalled()
     expect(picked.deleted).toEqual([])
+  })
+
+  it('opens sign-in saying so when the account was already deleted, as by a second press', async () => {
+    answer = { status: 404, body: { error: 'There is no such account', handOver: [] } }
+
+    expect(await deleteMyAccount('workspace-1', { email: 'ada@example.com', deletes: [] })).toBeUndefined()
+    expect(picked.deleted).toEqual(['dazbee_session'])
+    expect(redirect).toHaveBeenCalledWith('/login?deleted=1')
   })
 })

@@ -102,9 +102,13 @@ export const AccountDeletion = z.object({
 })
 export type AccountDeletion = z.infer<typeof AccountDeletion>
 
-/** Deleting the account, confirmed with the person's email. */
+/**
+ * Deleting the account, confirmed with the person's email and the workspaces they were shown it deletes,
+ * which must still be the ones it deletes.
+ */
 export const DeleteAccount = z.object({
   email: z.string().trim().max(320),
+  deletes: z.array(RecordId).max(1000),
 })
 export type DeleteAccount = z.infer<typeof DeleteAccount>
 

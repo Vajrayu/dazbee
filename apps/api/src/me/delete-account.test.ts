@@ -19,7 +19,7 @@ import {
 import { AccountDeletion, BrandSummary, DesignSummary, Invite, SignedIn } from '@dazbee/schema'
 
 import { createApp } from '../app.ts'
-import { tokenSession } from '../sign-in/session.ts'
+import { signSessionToken, tokenSession } from '../sign-in/session.ts'
 import {
   addPerson,
   addWorkspace,
@@ -37,7 +37,7 @@ import {
   workos,
 } from '../test-api.ts'
 import { png } from '../test-files.ts'
-import { finishDeletions } from './pending-deletions.ts'
+import { finishDeletions, FOLDER_SETTLE_MS } from './pending-deletions.ts'
 
 /** A WorkOS failure that isn't a missing record. */
 const outage = () => Object.assign(new Error('WorkOS is down'), { status: 500 })
@@ -80,11 +80,28 @@ async function soloAccount() {
   return { own, team, owner, person, ownBrand, ownDesign, teamBrand, teamDesign, otherInvite }
 }
 
-/** Deletes the account of `as`, confirmed with `email`. */
-const deleteAs = (as: string, email: string) => request(as, 'DELETE', '/me', { email })
+/** Deletes the account of `as`, confirmed with `email` and the workspaces it deletes, `deletes`. */
+const deleteAs = (as: string, email: string, deletes: string[]) => request(as, 'DELETE', '/me', { email, deletes })
 
 const pendingFor = (targets: string[]) =>
   db.select().from(pendingDeletions).where(inArray(pendingDeletions.target, targets))
+
+/** Waits until nothing is left to delete outside the database of what the targets name. */
+const finished = (targets: string[]) =>
+  vi.waitFor(async () => {
+    const left = await pendingFor(targets)
+    if (left.some((row) => row.kind !== 'storage-folder')) throw new Error('still deleting')
+    for (const row of left) if ((await storage.list(row.target)).length > 0) throw new Error('still deleting files')
+  })
+
+/** The next start, once storage folders have settled, for what the targets name. */
+const nextStart = async (targets: string[]) =>
+  finishDeletions(
+    db,
+    { storage, signIn: workos.provider, invites: workos.invites },
+    (await pendingFor(targets)).map((row) => row.id),
+    Date.now() + FOLDER_SETTLE_MS,
+  )
 
 afterEach(() => {
   workos.failing.deleteOrganization = null
@@ -136,7 +153,8 @@ describe('DELETE /me', () => {
     ])
     expect(await storage.list(`workspaces/${own.id}/`)).not.toEqual([])
 
-    expect(await deleteAs(person.as, ` ${person.email.toUpperCase()} `)).toEqual({ status: 204, json: null })
+    expect(await deleteAs(person.as, ` ${person.email.toUpperCase()} `, [own.id])).toEqual({ status: 204, json: null })
+    await finished([`workspaces/${own.id}/`, organizationOf(own.id), person.workosUserId])
 
     expect(await db.select().from(users).where(eq(users.id, person.id))).toEqual([])
     expect(await db.select().from(workspaces).where(eq(workspaces.id, own.id))).toEqual([])
@@ -152,6 +170,8 @@ describe('DELETE /me', () => {
     expect(workos.made.deletedOrganizations).toContain(organizationOf(own.id))
     expect(workos.made.deletedUsers).toContain(person.workosUserId)
     expect((await workos.invites.read(providerInvite?.id ?? '')).state).toBe('revoked')
+    // The folder is deleted once more when it has settled, as the next start does too.
+    expect(await nextStart([`workspaces/${own.id}/`])).toBe(0)
     expect(await pendingFor([`workspaces/${own.id}/`, person.workosUserId])).toEqual([])
 
     // The team keeps its workspace, its brand, the design the person made there, its Owner and its invites.
@@ -184,19 +204,26 @@ describe('DELETE /me', () => {
     expect(workos.made.deletedOrganizations).not.toContain(organizationOf(team.id))
   })
 
-  it('ends the person’s session: every later request gets 401', async () => {
+  it('ends the person’s session: every later request gets 401, and their WorkOS session ends', async () => {
     const { own, person, ownBrand } = await soloAccount()
-    expect((await deleteAs(person.as, person.email)).status).toBe(204)
+    const { token } = signSessionToken(sessionSecret, { userId: person.id, workosSessionId: `session-${person.id}` })
+    const deleted = await app.request('/me', {
+      method: 'DELETE',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ email: person.email, deletes: [own.id] }),
+    })
+    expect(deleted.status).toBe(204)
+    expect(workos.made.endedSessions).toContain(`session-${person.id}`)
     expect(await request(person.as, 'GET', '/me')).toEqual({ status: 401, json: { error: 'Sign in first' } })
     expect((await request(person.as, 'GET', '/me/deletion')).status).toBe(401)
     expect((await call({ as: person.as, workspace: own.id }, 'GET', `/brands/${ownBrand.id}/designs`)).status).toBe(401)
-    expect((await deleteAs(person.as, person.email)).status).toBe(401)
+    expect((await deleteAs(person.as, person.email, [own.id])).status).toBe(401)
   })
 
   it('refuses an Owner of a workspace with other members until they hand over Owner', async () => {
     const { own, team, person } = await soloAccount()
     const admin = await addPerson([[own.id, 'admin']])
-    const refused = await deleteAs(person.as, person.email)
+    const refused = await deleteAs(person.as, person.email, [own.id])
     expect(refused).toEqual({
       status: 409,
       json: { error: 'Hand over Owner first', handOver: [{ id: own.id, name: 'Own studio' }] },
@@ -205,7 +232,7 @@ describe('DELETE /me', () => {
     expect(await db.select({ id: brands.id }).from(brands).where(eq(brands.workspaceId, own.id))).toHaveLength(1)
 
     expect((await call(person.as, 'POST', `/members/${admin.id}/owner`)).status).toBe(204)
-    expect((await deleteAs(person.as, person.email)).status).toBe(204)
+    expect((await deleteAs(person.as, person.email, [])).status).toBe(204)
 
     // Handed over, the workspace is the new Owner's, with everything in it.
     expect(
@@ -223,12 +250,30 @@ describe('DELETE /me', () => {
   it('refuses another email, deleting nothing', async () => {
     const { own, person } = await soloAccount()
     for (const email of ['', 'someone@example.com'])
-      expect(await deleteAs(person.as, email)).toEqual({
+      expect(await deleteAs(person.as, email, [own.id])).toEqual({
         status: 400,
         json: { error: 'Type your account’s email to delete it', handOver: [] },
       })
-    expect((await request(person.as, 'DELETE', '/me', {})).status).toBe(400)
+    expect((await request(person.as, 'DELETE', '/me', { email: person.email })).status).toBe(400)
     expect(await db.select({ id: workspaces.id }).from(workspaces).where(eq(workspaces.id, own.id))).toHaveLength(1)
+    expect((await request(person.as, 'GET', '/me')).status).toBe(200)
+  })
+
+  it('refuses when the workspaces it deletes are no longer those the person was shown, deleting nothing', async () => {
+    const { own, person } = await soloAccount()
+    const extra = await addWorkspace('Handed to them')
+    await db.insert(memberships).values({ workspaceId: extra.id, userId: person.id, role: 'owner' })
+    expect(await deleteAs(person.as, person.email, [own.id])).toEqual({
+      status: 409,
+      json: { error: 'The workspaces deleting deletes have changed; look again', handOver: [] },
+    })
+    expect(await deleteAs(person.as, person.email, [own.id, extra.id, 'another'])).toMatchObject({ status: 409 })
+    expect(
+      await db
+        .select({ id: workspaces.id })
+        .from(workspaces)
+        .where(inArray(workspaces.id, [own.id, extra.id])),
+    ).toHaveLength(2)
     expect((await request(person.as, 'GET', '/me')).status).toBe(200)
   })
 
@@ -250,11 +295,13 @@ describe('DELETE /me', () => {
     const response = await failing.request('/me', {
       method: 'DELETE',
       headers: { ...authorization(person.as), 'content-type': 'application/json' },
-      body: JSON.stringify({ email: person.email }),
+      body: JSON.stringify({ email: person.email, deletes: [own.id] }),
     })
     expect(response.status).toBe(204)
     expect(await db.select().from(users).where(eq(users.id, person.id))).toEqual([])
     const targets = [`workspaces/${own.id}/`, organizationOf(own.id), person.workosUserId]
+    // The deletions after the answer have run and failed.
+    await vi.waitFor(() => expect(console.error).toHaveBeenCalledTimes(3))
     expect((await pendingFor(targets)).map((row) => row.kind).sort()).toEqual([
       'storage-folder',
       'workos-organization',
@@ -265,7 +312,7 @@ describe('DELETE /me', () => {
     // The next start, with storage and WorkOS answering again.
     workos.failing.deleteOrganization = null
     workos.failing.deleteUser = null
-    expect(await finishDeletions(db, { storage, signIn: workos.provider, invites: workos.invites })).toBe(0)
+    expect(await nextStart(targets)).toBe(0)
     expect(await pendingFor(targets)).toEqual([])
     expect(await storage.list(`workspaces/${own.id}/`)).toEqual([])
     expect(workos.made.deletedOrganizations).toContain(organizationOf(own.id))
@@ -274,7 +321,7 @@ describe('DELETE /me', () => {
 
   it('lets the person sign up again with the same email into a new, empty workspace', async () => {
     const { own, person } = await soloAccount()
-    expect((await deleteAs(person.as, person.email)).status).toBe(204)
+    expect((await deleteAs(person.as, person.email, [own.id])).status).toBe(204)
     const code = `code-again-${person.id}`
     workos.people[code] = {
       user: { id: `workos-again-${person.id}`, email: person.email, name: 'Again', emailVerified: true },

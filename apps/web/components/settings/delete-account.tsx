@@ -93,7 +93,8 @@ export function DeleteAccount({
                 event.preventDefault()
                 if (!confirmed || busy) return
                 setRefusal(null)
-                startTransition(async () => setRefusal(await deleteMyAccount(workspaceId, typed)))
+                const deletes = deletion.deletes.map((workspace) => workspace.id)
+                startTransition(async () => setRefusal(await deleteMyAccount(workspaceId, { email: typed, deletes })))
               }}
             >
               <p className="text-small leading-snug [overflow-wrap:anywhere]">

@@ -3,7 +3,9 @@
 // What a team shares stays: they leave the other workspaces as a member does, and what they made there stays
 // with the workspace. An Owner of a workspace with other members hands over Owner first; until then deleting
 // is refused and names those workspaces. The rows go in one transaction, which also records what is left
-// outside the database (pending-deletions.ts); that is deleted once the transaction commits.
+// outside the database (pending-deletions.ts); that is deleted once the transaction commits. The person
+// confirms with their email and the workspaces they were shown it deletes: when those are no longer the
+// ones it deletes, nothing is deleted.
 import { and, asc, eq, gt, inArray, isNotNull, isNull, sql } from 'drizzle-orm'
 
 import {
@@ -22,15 +24,15 @@ import {
   users,
   workspaces,
 } from '@dazbee/db'
-import type { AccountDeletion, WorkspaceSummary } from '@dazbee/schema'
+import type { AccountDeletion, DeleteAccount, WorkspaceSummary } from '@dazbee/schema'
 
-import { type Deleters, finishDeletions, type PendingDeletion, recordDeletions } from './pending-deletions.ts'
+import { type Deleters, type PendingDeletion, recordDeletions } from './pending-deletions.ts'
 
 /** A refused deletion, answered with its status, message and the workspaces to hand over first. */
 export class AccountRefusal extends Error {
-  readonly status: 400 | 409
+  readonly status: 400 | 404 | 409
   readonly handOver: WorkspaceSummary[]
-  constructor(status: 400 | 409, message: string, handOver: WorkspaceSummary[] = []) {
+  constructor(status: 400 | 404 | 409, message: string, handOver: WorkspaceSummary[] = []) {
     super(message)
     this.status = status
     this.handOver = handOver
@@ -49,13 +51,17 @@ export async function accountDeletion(db: Db, userId: string): Promise<AccountDe
 }
 
 /**
- * Deletes the person's account once `email` is theirs and they own no workspace with other members, then
- * deletes what it left outside the database. A failure there is logged and tried again at the next start;
- * the account is deleted all the same.
+ * Deletes the person's account once the email is theirs, they own no workspace with other members, and the
+ * workspaces it deletes are the ones they confirmed. Answers the ids of what it left to delete outside the
+ * database, for `finishSoon`.
  */
-export async function deleteAccount(db: Db, deleters: Deleters, userId: string, email: string): Promise<void> {
-  const pending = await db.transaction((tx) => deleteRows(tx, deleters, userId, email))
-  await finishDeletions(db, deleters, pending)
+export async function deleteAccount(
+  db: Db,
+  deleters: Deleters,
+  userId: string,
+  confirmed: DeleteAccount,
+): Promise<string[]> {
+  return db.transaction((tx) => deleteRows(tx, deleters, userId, confirmed))
 }
 
 /**
@@ -63,13 +69,18 @@ export async function deleteAccount(db: Db, deleters: Deleters, userId: string, 
  * The person's row and memberships are locked first, so no invite they accept and no Owner handed to them
  * lands meanwhile, then the workspaces they own, so nobody joins one while it is counted and deleted.
  */
-async function deleteRows(tx: Tx, deleters: Deleters, userId: string, email: string): Promise<string[]> {
+async function deleteRows(
+  tx: Tx,
+  deleters: Deleters,
+  userId: string,
+  { email, deletes }: DeleteAccount,
+): Promise<string[]> {
   const [user] = await tx
     .select({ email: users.email, workosUserId: users.workosUserId })
     .from(users)
     .where(eq(users.id, userId))
     .for('update')
-  if (!user) throw new AccountRefusal(400, 'There is no such account')
+  if (!user) throw new AccountRefusal(404, 'There is no such account')
   if (email.trim().toLowerCase() !== user.email.toLowerCase())
     throw new AccountRefusal(400, 'Type your account’s email to delete it')
   await tx
@@ -91,6 +102,9 @@ async function deleteRows(tx: Tx, deleters: Deleters, userId: string, email: str
   if (handOver.length > 0) throw new AccountRefusal(409, 'Hand over Owner first', handOver)
 
   const alone = owned.filter((workspace) => !workspace.shared)
+  const shown = new Set(deletes)
+  if (shown.size !== alone.length || alone.some((workspace) => !shown.has(workspace.id)))
+    throw new AccountRefusal(409, 'The workspaces deleting deletes have changed; look again')
   await deleteWorkspaces(
     tx,
     alone.map((workspace) => workspace.id),

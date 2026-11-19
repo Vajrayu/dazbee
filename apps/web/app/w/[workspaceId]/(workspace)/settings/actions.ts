@@ -8,7 +8,14 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
-import { CreateInvite, InviteRole, type MemberBrands, roleLimitable, type UpdateMember } from '@dazbee/schema'
+import {
+  CreateInvite,
+  type DeleteAccount,
+  InviteRole,
+  type MemberBrands,
+  roleLimitable,
+  type UpdateMember,
+} from '@dazbee/schema'
 
 import { workspacePath } from '@/lib/brand-routes.ts'
 import { format } from '@/lib/i18n/index.ts'
@@ -134,13 +141,14 @@ export async function leave(workspaceId: string): Promise<string | null> {
 }
 
 /**
- * Deletes the person's account, confirmed with the email they typed, then forgets their session and opens
- * sign-in, which says the account is deleted. Refused, Settings draws again, naming any workspace to hand over
- * Owner of first.
+ * Deletes the person's account, confirmed with the email they typed and the workspaces they were shown it
+ * deletes, then forgets their session and opens sign-in, which says the account is deleted; an account
+ * already deleted, as by a second press, opens it too. Refused, Settings draws again with what deleting
+ * deletes now, naming any workspace to hand over Owner of first.
  */
-export async function deleteMyAccount(workspaceId: string, email: string): Promise<string | null> {
-  const refusal = await refusalOf(() => deleteAccount(email))
-  if (refusal) {
+export async function deleteMyAccount(workspaceId: string, confirmed: DeleteAccount): Promise<string | null> {
+  const refusal = await refusalOf(() => deleteAccount(confirmed))
+  if (refusal && refusal.status !== 404) {
     changed(workspaceId)
     return wordsFor('delete', refusal)
   }
@@ -159,7 +167,7 @@ function changed(workspaceId: string) {
  * that can't be given (the member no longer an Editor or Reviewer, or a brand not the workspace's) a 400,
  * the Owner's handing over refused to anyone else a 403 and to a member no longer an Admin a 400, and the
  * Owner's leaving a 400. Deleting the account with another email is a 400, and while the person owns a
- * workspace with other members a 409. Of an invite's: inviting a member is a 400 (the form is checked here
+ * workspace with other members, or when it would delete other workspaces than they were shown, a 409. Of an invite's: inviting a member is a 400 (the form is checked here
  * first), a person no longer an Owner or Admin a 403, an invite no longer pending a 404 on resend or revoke,
  * and an invite being sent or changed meanwhile a 409, except on revoke, where a 409 is an invite already
  * accepted. Any other refusal, such as a workspace with no invites set up, keeps the API's message.
@@ -176,7 +184,7 @@ async function wordsFor(change: Change, refusal: Refusal, email = ''): Promise<s
   if (change === 'leave') return refusal.status === 400 ? r.handOverFirst : refusal.message
   if (change === 'delete') {
     if (refusal.status === 400) return r.wrongEmail
-    return refusal.status === 409 ? r.handOverToDelete : refusal.message
+    return refusal.status === 409 ? r.deletionChanged : refusal.message
   }
   if (refusal.status === 403) return r.notManager
   if (change === 'invite' && refusal.status === 400) return format(r.alreadyMember, { email })

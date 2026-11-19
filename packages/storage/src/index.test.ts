@@ -85,4 +85,18 @@ describe('openStorage', () => {
     expect(await storage.exists(`${folder}-next/kept`)).toBe(true)
     await expect(storage.deleteFolder(folder)).rejects.toThrow('not a folder')
   })
+
+  it('refuses to list a bucket that is not there, so a folder is never taken as deleted', async () => {
+    const missing = openStorage(
+      storageSettings({
+        STORAGE_ENDPOINT: 'http://127.0.0.1:59000',
+        STORAGE_ACCESS_KEY_ID: 'dazbee',
+        STORAGE_SECRET_ACCESS_KEY: 'dazbee-local-secret',
+        STORAGE_REGION: 'us-east-1',
+        ...process.env,
+        STORAGE_BUCKET: `missing-${randomUUID()}`,
+      }),
+    )
+    await expect(missing.deleteFolder('test/')).rejects.toThrow('storage has no bucket')
+  })
 })

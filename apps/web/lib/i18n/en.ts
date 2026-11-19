@@ -280,7 +280,7 @@ export const en = {
       notAdmin: 'Only an Admin can be made Owner. Reload to see their role now.',
       handOverFirst: 'Hand over Owner to an Admin before you leave.',
       wrongEmail: 'That isn’t your account’s email. Type it as shown.',
-      handOverToDelete: 'Hand over Owner of the workspaces below before you delete your account.',
+      deletionChanged: 'What deleting your account deletes has changed. Read it again below.',
       brandsRefused: 'These brands can’t be given now. Reload to see this member’s role and the brands.',
     },
   },

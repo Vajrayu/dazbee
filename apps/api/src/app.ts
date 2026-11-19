@@ -32,7 +32,7 @@ import { memberRoutes } from './members/routes.ts'
 import { devInviteRoutes, type DevInvitesSettings } from './sign-in/dev-invites.ts'
 import { sessionRefusal } from './sign-in/early-access.ts'
 import { signInRoutes } from './sign-in/routes.ts'
-import type { SessionOf } from './sign-in/session.ts'
+import { bearerToken, readSessionToken, type SessionOf } from './sign-in/session.ts'
 import type { SignInSettings } from './sign-in/sign-in.ts'
 import { templateRoutes } from './templates/routes.ts'
 import { versionRoutes } from './versions/routes.ts'
@@ -89,7 +89,8 @@ export function createApp({
 
   app.use('/me', signedIn)
   app.use('/me/*', signedIn)
-  app.route('/', meRoutes({ db, deleters: { storage, signIn: signIn?.provider ?? null, invites: invites.workos } }))
+  const deleters = { storage, signIn: signIn?.provider ?? null, invites: invites.workos }
+  app.route('/', meRoutes({ db, deleters, endWorkosSession: (request) => endWorkosSession(signIn, request) }))
 
   // `/workspaces/:workspaceId/*` matches the workspace's own path too.
   app.use('/workspaces/:workspaceId/*', signedIn, membershipScope(db))
@@ -116,4 +117,11 @@ export function createApp({
   })
 
   return app
+}
+
+/** Ends the WorkOS session the request's session token came from, when sign-in is set up and it has one. */
+async function endWorkosSession(signIn: SignInSettings | null, request: Request) {
+  const token = bearerToken(request)
+  const payload = signIn && token ? readSessionToken(signIn.secret, token) : null
+  if (signIn && payload?.workosSessionId) await signIn.provider.endSession(payload.workosSessionId)
 }

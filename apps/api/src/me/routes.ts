@@ -8,9 +8,18 @@ import { type AccountDeletion, DeleteAccount, type DeleteAccountRefused, type Me
 import { body, type Env, error } from '../http.ts'
 import { accountDeletion, AccountRefusal, deleteAccount } from './delete-account.ts'
 import { findMe } from './me.ts'
-import type { Deleters } from './pending-deletions.ts'
+import { type Deleters, finishSoon } from './pending-deletions.ts'
 
-export function meRoutes({ db, deleters }: { db: Db; deleters: Deleters }): Hono<Env> {
+export function meRoutes({
+  db,
+  deleters,
+  endWorkosSession,
+}: {
+  db: Db
+  deleters: Deleters
+  /** Ends the WorkOS session the request's session token came from, if any. */
+  endWorkosSession: (request: Request) => Promise<void>
+}): Hono<Env> {
   const app = new Hono<Env>()
 
   app.get('/me', async (c) => {
@@ -22,17 +31,22 @@ export function meRoutes({ db, deleters }: { db: Db; deleters: Deleters }): Hono
     c.json((await accountDeletion(db, c.var.session.userId)) satisfies AccountDeletion),
   )
 
-  // Deleting the account, confirmed with its email: 400 for another email, 409 naming the workspaces the
-  // person owns with other members, who hand over Owner first.
+  // Deleting the account, confirmed with its email and the workspaces it deletes: 400 for another email, 404
+  // once it is deleted already, and 409 naming the workspaces the person owns with other members, who hand
+  // over Owner first, or when the workspaces it deletes are no longer those confirmed. Once the rows are
+  // deleted it ends the person's WorkOS session and answers, and deletes what is outside the database after.
   app.delete('/me', async (c) => {
     const input = await body(c.req.raw, DeleteAccount)
     if (input instanceof Response) return input
+    let pending: string[]
     try {
-      await deleteAccount(db, deleters, c.var.session.userId, input.email)
+      pending = await deleteAccount(db, deleters, c.var.session.userId, input)
     } catch (e) {
       if (!(e instanceof AccountRefusal)) throw e
       return c.json({ ...error(e.message), handOver: e.handOver } satisfies DeleteAccountRefused, e.status)
     }
+    await endWorkosSession(c.req.raw).catch((e: unknown) => console.error('the WorkOS session did not end', e))
+    finishSoon(db, deleters, pending)
     return c.body(null, 204)
   })
 

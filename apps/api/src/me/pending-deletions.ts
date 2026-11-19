@@ -1,8 +1,9 @@
 // What deleting an account leaves to delete outside the database: a deleted workspace's storage folder and
 // WorkOS organization, the person's WorkOS user, and the WorkOS invitations to their email. Each waits in
-// `pending_deletions` until it is done: the API deletes them as the account's deletion commits, and again
-// when it starts. A failure is logged and its row kept for the next start. Each deletion can run twice, as
-// two servers starting at once do: one already gone is done.
+// `pending_deletions` until it is done: the API deletes them once the account's deletion commits, and again
+// when it starts. A failure is logged and its row kept for the next start. A storage folder is deleted again
+// once a signed upload, or a picture being drawn when the workspace went, can no longer land in it. Each
+// deletion can run twice, as two servers starting at once do: one already gone is done.
 import { eq, inArray } from 'drizzle-orm'
 
 import { type Db, newId, type PendingDeletionKind, pendingDeletions, type Tx, users } from '@dazbee/db'
@@ -21,6 +22,12 @@ export interface Deleters {
   invites: Pick<InvitesProvider, 'revoke'> | null
 }
 
+/**
+ * How long after a workspace is deleted its storage folder is deleted once more: past a signed upload's five
+ * minutes, and a picture being drawn then.
+ */
+export const FOLDER_SETTLE_MS = 10 * 60 * 1000
+
 /** One thing to delete outside the database. */
 export interface PendingDeletion {
   kind: PendingDeletionKind
@@ -36,10 +43,24 @@ export async function recordDeletions(tx: Tx, deletions: PendingDeletion[]): Pro
 }
 
 /**
- * Deletes what the rows `ids` name, or every row when given none, one at a time, and deletes each row that is
- * done. A failure is logged and leaves its row. Answers how many rows are left of those it tried.
+ * Deletes what the rows `ids` name now, without waiting for it, and again once storage folders have settled;
+ * a failure is logged and left for the next start.
  */
-export async function finishDeletions(db: Db, deleters: Deleters, ids?: string[]): Promise<number> {
+export function finishSoon(db: Db, deleters: Deleters, ids: string[]): void {
+  if (ids.length === 0) return
+  const finish = () => {
+    finishDeletions(db, deleters, ids).catch((e: unknown) => console.error('pending deletions failed', e))
+  }
+  finish()
+  setTimeout(finish, FOLDER_SETTLE_MS).unref()
+}
+
+/**
+ * Deletes what the rows `ids` name, or every row when given none, one at a time, and deletes each row that is
+ * done; a storage folder's row stays until the folder has settled at `now`. A failure is logged and leaves its
+ * row. Answers how many rows are left of those it tried.
+ */
+export async function finishDeletions(db: Db, deleters: Deleters, ids?: string[], now = Date.now()): Promise<number> {
   const rows = await db
     .select()
     .from(pendingDeletions)
@@ -48,7 +69,7 @@ export async function finishDeletions(db: Db, deleters: Deleters, ids?: string[]
   let left = 0
   for (const row of rows) {
     try {
-      if (!(await deleteOutside(db, deleters, row))) {
+      if (!(await deleteOutside(db, deleters, row, now))) {
         left += 1
         continue
       }
@@ -62,14 +83,20 @@ export async function finishDeletions(db: Db, deleters: Deleters, ids?: string[]
 }
 
 /**
- * Deletes the one thing outside the database; false when its deleter isn't set up here. A WorkOS user who
- * signed up again since is kept: their sign-in made them a person again.
+ * Deletes the one thing outside the database; false when its deleter isn't set up here, or for a storage
+ * folder that hasn't settled yet. A WorkOS user who signed up again since is kept: their sign-in made them a
+ * person again.
  */
-async function deleteOutside(db: Db, { storage, signIn, invites }: Deleters, row: PendingDeletion) {
+async function deleteOutside(
+  db: Db,
+  { storage, signIn, invites }: Deleters,
+  row: PendingDeletion & { createdAt: Date },
+  now: number,
+) {
   switch (row.kind) {
     case 'storage-folder':
       await storage.deleteFolder(row.target)
-      return true
+      return now - row.createdAt.getTime() >= FOLDER_SETTLE_MS
     case 'workos-organization':
       if (!signIn) return false
       await gone(signIn.deleteOrganization(row.target))
