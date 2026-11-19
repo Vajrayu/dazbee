@@ -16,6 +16,14 @@ _Avoid_: Seat (that is billing), user (a user is the person, a member their plac
 An Owner's or Admin's offer to an email address to become a member of their workspace, with a role and, for an Editor or Reviewer, the brands they may see. Accepting it adds the workspace to the person's others; it makes no workspace of their own.
 _Avoid_: Invitation, share
 
+**Early access**:
+The time before sign-up opens to everyone: only people on the allow-list, people who are already members and people accepting an invite get in. Anyone else is told Dazbee is in early access, or to open the invite waiting in their email, and gets no account or workspace.
+_Avoid_: Beta, waitlist
+
+**Allow-list**:
+The emails allowed to sign up during early access, set on the API. A person gets in by it only with an email WorkOS verified; an empty list lets anyone sign up.
+_Avoid_: Whitelist, waitlist
+
 **Session**:
 A signed-in person, in any of their workspaces at once: each page names the workspace it shows, and every API route checks that the person is a member there and may see the brand. It ends when they sign out or after seven days; stopping being a member of a workspace refuses their next request there at once, and closes a design they have open within ten minutes.
 _Avoid_: Login, auth

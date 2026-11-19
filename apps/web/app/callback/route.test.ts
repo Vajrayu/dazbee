@@ -76,6 +76,21 @@ describe('GET /callback', () => {
     }
   })
 
+  it('sends a sign-in early access refused back to sign in with its reason, keeping no session', async () => {
+    for (const reason of ['early-access', 'open-invite'] as const) {
+      jar.set(STATE_COOKIE, 'the-one-we-started')
+      vi.mocked(completeSignIn).mockResolvedValueOnce({ refused: reason })
+
+      const response = await GET(new NextRequest('http://localhost:3000/callback?code=good&state=the-one-we-started'))
+
+      expect([response.status, response.headers.get('location')]).toEqual([
+        303,
+        `http://localhost:3000/login?error=${reason}`,
+      ])
+      expect(jar.has(SESSION_COOKIE)).toBe(false)
+    }
+  })
+
   it('refuses a state this browser did not start with: back to the sign-in page with its error, no session kept', async () => {
     jar.set(STATE_COOKIE, 'the-one-we-started')
 

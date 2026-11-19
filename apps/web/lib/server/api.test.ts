@@ -2,7 +2,7 @@
 // paths it asks the API for.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { getAccess, getRole, getWorkspace, listDesigns, signInLink } from './api.ts'
+import { ApiFailure, completeSignIn, getAccess, getRole, getWorkspace, listDesigns, signInLink } from './api.ts'
 
 /** The person `/me` answers with: the Owner of one workspace and an Editor limited to some brands in another. */
 const ME = {
@@ -68,6 +68,33 @@ describe('signInLink', () => {
     await signInLink('a-state-of-sixteen-or-more', 'not a token&x=1')
 
     expect(askedWithQuery).toEqual(['/auth/sign-in-url?state=a-state-of-sixteen-or-more'])
+  })
+})
+
+describe('completeSignIn', () => {
+  /** The API's next answer to the sign-in callback. */
+  const answer = (status: number, body: unknown) =>
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(body), { status }))
+
+  it('gives the session the API made', async () => {
+    answer(200, { token: 'a-session-token', expiresAt: 1, open: 'workspace-1' })
+
+    expect(await completeSignIn('a-code')).toEqual({ token: 'a-session-token', expiresAt: 1, open: 'workspace-1' })
+  })
+
+  it("keeps early access's reason for refusing the person", async () => {
+    for (const reason of ['early-access', 'open-invite']) {
+      answer(403, { error: 'Dazbee is in early access', reason })
+
+      expect(await completeSignIn('a-code')).toEqual({ refused: reason })
+    }
+  })
+
+  it('throws any other refusal', async () => {
+    answer(403, { error: 'Forbidden' })
+    await expect(completeSignIn('a-code')).rejects.toBeInstanceOf(ApiFailure)
+    answer(400, { error: 'That sign-in did not work; try again', reason: 'early-access' })
+    await expect(completeSignIn('a-code')).rejects.toBeInstanceOf(ApiFailure)
   })
 })
 

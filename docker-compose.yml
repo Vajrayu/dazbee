@@ -55,6 +55,8 @@ services:
       WORKOS_CLIENT_ID: ${WORKOS_CLIENT_ID:-}
       WORKOS_REDIRECT_URI: ${WORKOS_REDIRECT_URI:-}
       SESSION_SECRET: ${SESSION_SECRET:-local-only-session-secret-0000000}
+      # Early access's allow-list; empty lets anyone sign up.
+      ALLOWED_EMAILS: ${ALLOWED_EMAILS:-}
       STORAGE_ENDPOINT: http://storage:9000
       STORAGE_BUCKET: dazbee
       STORAGE_ACCESS_KEY_ID: dazbee

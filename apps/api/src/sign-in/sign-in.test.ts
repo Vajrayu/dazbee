@@ -14,11 +14,11 @@ import { accessTokenSessionId, type SignedInPerson, workosProvider, workosSettin
 const run = randomUUID().slice(0, 8)
 
 const ada: SignedInPerson = {
-  user: { id: `user_ada_${run}`, email: `ada-${run}@example.com`, name: 'Ada Lovelace' },
+  user: { id: `user_ada_${run}`, email: `ada-${run}@example.com`, name: 'Ada Lovelace', emailVerified: true },
   sessionId: `session_ada_${run}`,
 }
 const bo: SignedInPerson = {
-  user: { id: `user_bo_${run}`, email: `bo-${run}@example.com`, name: '' },
+  user: { id: `user_bo_${run}`, email: `bo-${run}@example.com`, name: '', emailVerified: true },
   sessionId: null,
 }
 Object.assign(workos.people, { [`code-ada-${run}`]: ada, [`code-bo-${run}`]: bo })
@@ -166,7 +166,12 @@ describe('accepting an invite at sign-in', () => {
   function newPerson() {
     people += 1
     const person: SignedInPerson = {
-      user: { id: `user_invited_${people}_${run}`, email: `invited-${people}-${run}@example.com`, name: 'Ivy' },
+      user: {
+        id: `user_invited_${people}_${run}`,
+        email: `invited-${people}-${run}@example.com`,
+        name: 'Ivy',
+        emailVerified: true,
+      },
       sessionId: null,
     }
     const code = `code-invited-${people}-${run}`

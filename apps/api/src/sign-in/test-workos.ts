@@ -14,6 +14,7 @@ export function fakeWorkos(people: Record<string, SignedInPerson> = {}) {
     members: [] as { organizationId: string; userId: string }[],
     invitations: [] as { id: string; email: string; organizationId: string | null; inviterUserId: string }[],
     removed: [] as { organizationId: string; userId: string }[],
+    endedSessions: [] as string[],
   }
   // Each invitation as WorkOS holds it, by id.
   const invitations = new Map<string, ProviderInvite>()
@@ -35,6 +36,10 @@ export function fakeWorkos(people: Record<string, SignedInPerson> = {}) {
       return Promise.resolve()
     },
     signOutUrl: (sessionId) => `https://auth.example.test/logout?session_id=${sessionId}`,
+    endSession: (sessionId) => {
+      made.endedSessions.push(sessionId)
+      return Promise.resolve()
+    },
   }
 
   /** The invitation as WorkOS would answer it now: past its expiry, a pending one is expired. */
