@@ -51,7 +51,9 @@ describe('a Dazbee invite', () => {
       organizationId: null,
     })
     const list = await listed()
-    expect(list.joined).toContainEqual(expect.objectContaining({ id: invite.id, email: person.user.email }))
+    expect(list.joined).toContainEqual(
+      expect.objectContaining({ id: invite.id, email: person.user.email, name: person.user.name }),
+    )
     expect(list.pending.map((each) => each.email)).not.toContain(person.user.email)
   })
 

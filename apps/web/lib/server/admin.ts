@@ -2,6 +2,7 @@
 // waiting list, which the API answers 404 to anyone but an admin, and the public request to join.
 import 'server-only'
 
+import { cache } from 'react'
 import { z } from 'zod'
 
 import { AccessRequest, DazbeeInvite, DazbeeInvites, type RequestAccess } from '@dazbee/schema'
@@ -10,9 +11,9 @@ import { ApiFailure, call } from './api.ts'
 
 /**
  * The Dazbee invites and the waiting list for the admin page, or null when the person is not an admin, to
- * whom the API answers as if there were no such page.
+ * whom the API answers as if there were no such page. Asked once per request, by the page and its title.
  */
-export async function findAdminPage(): Promise<{ invites: DazbeeInvites; requests: AccessRequest[] } | null> {
+export const findAdminPage = cache(async (): Promise<{ invites: DazbeeInvites; requests: AccessRequest[] } | null> => {
   try {
     const [invites, requests] = await Promise.all([
       call(DazbeeInvites, '/admin/invites'),
@@ -23,7 +24,7 @@ export async function findAdminPage(): Promise<{ invites: DazbeeInvites; request
     if (e instanceof ApiFailure && e.status === 404) return null
     throw e
   }
-}
+})
 
 /** Invites an email to Dazbee; an email with a pending invite has it sent again. */
 export const inviteToDazbee = (email: string) =>

@@ -7,7 +7,7 @@
 // gives nothing back.
 // As with a workspace's invites, the provider is never called inside a transaction: a short transaction
 // checks and reserves, the provider is called, then the row is written.
-import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lte, type SQL, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lte, sql } from 'drizzle-orm'
 
 import { dazbeeInvites, type Db, newId, type Tx, users } from '@dazbee/db'
 import type { DazbeeInvite, DazbeeInvites, InvitedPerson } from '@dazbee/schema'
@@ -263,8 +263,11 @@ async function refuseAccount(db: Db | Tx, email: string): Promise<void> {
  */
 async function invitedPeople(db: Db, removed: boolean): Promise<InvitedPerson[]> {
   const at = removed ? dazbeeInvites.removedAt : dazbeeInvites.acceptedAt
-  const name: SQL<string | null> =
-    sql`(select ${users.name} from ${users} where lower(${users.email}) = ${dazbeeInvites.email} order by ${users.createdAt} limit 1)`
+  // Spelled out with its tables named: Drizzle leaves the columns of a one-table query unqualified, and inside
+  // this subquery `email` would be the person's own.
+  const name = sql<string | null>`${sql.raw(
+    '(select "u"."name" from "users" "u" where lower("u"."email") = "dazbee_invites"."email" order by "u"."created_at" limit 1)',
+  )}`
   const rows = await db
     .selectDistinctOn([dazbeeInvites.email], { id: dazbeeInvites.id, email: dazbeeInvites.email, name, at })
     .from(dazbeeInvites)

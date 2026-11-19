@@ -32,8 +32,9 @@ export async function invite(_before: PilotInviteAnswer, form: FormData): Promis
   const input = CreateDazbeeInvite.safeParse({ email: form.get('email') ?? '' })
   if (!input.success) return { error: (await getMessages()).pilot.invite.badEmail }
   const refusal = await refusalOf(() => inviteToDazbee(input.data.email))
-  if (refusal) return { error: await wordsFor('invite', refusal, input.data.email) }
+  // A refusal may come from a change the page doesn't show yet, such as the person having joined.
   changed()
+  if (refusal) return { error: await wordsFor('invite', refusal, input.data.email) }
   return { sent: input.data.email }
 }
 

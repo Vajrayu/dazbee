@@ -17,7 +17,9 @@ export const dynamic = 'force-dynamic'
 
 const PANEL = 'flex flex-col gap-6 rounded-[20px] border border-line bg-surface p-5 shadow-panel md:p-7'
 
+/** The page's title, only where the page is found: elsewhere the title is the not-found page's. */
 export async function generateMetadata() {
+  if (!isPilotHost((await headers()).get('host')) || !(await findMe()) || !(await findAdminPage())) return {}
   return { title: `${(await getMessages()).pilot.title} · Dazbee` }
 }
 

@@ -3,7 +3,7 @@
 // The early-access notice's Request access: a button that opens a short form for an email, a name, a company
 // and what they will make (which may be left out), with Cloudflare Turnstile's check when the site has a key
 // (TURNSTILE_SITE_KEY). Once it is sent, the form gives way to the thanks; why it wasn't sent shows under it.
-import { startTransition, useActionState, useEffect, useRef, useState } from 'react'
+import { type ReactNode, startTransition, useActionState, useEffect, useRef, useState } from 'react'
 
 import { Note } from '@/components/settings/note.tsx'
 import { buttonStyles } from '@/components/ui/button.tsx'
@@ -98,44 +98,28 @@ export function RequestAccess({ turnstileSiteKey }: { turnstileSiteKey: string }
       <h2 id="request-access-title" className="text-label font-semibold">
         {w.title}
       </h2>
-      <input
-        name="email"
-        type="email"
-        required
-        maxLength={254}
-        autoComplete="email"
-        aria-label={w.email}
-        placeholder={w.emailPlaceholder}
-        className={FIELD}
-      />
+      <Field label={w.email}>
+        <input
+          name="email"
+          type="email"
+          required
+          maxLength={254}
+          autoComplete="email"
+          placeholder={w.emailPlaceholder}
+          className={FIELD}
+        />
+      </Field>
       <div className="flex flex-wrap gap-3">
-        <input
-          name="name"
-          required
-          maxLength={120}
-          autoComplete="name"
-          aria-label={w.name}
-          placeholder={w.name}
-          className={cn(FIELD, 'flex-1 basis-48')}
-        />
-        <input
-          name="company"
-          required
-          maxLength={120}
-          autoComplete="organization"
-          aria-label={w.company}
-          placeholder={w.company}
-          className={cn(FIELD, 'flex-1 basis-48')}
-        />
+        <Field label={w.name} className="flex-1 basis-48">
+          <input name="name" required maxLength={120} autoComplete="name" className={FIELD} />
+        </Field>
+        <Field label={w.company} className="flex-1 basis-48">
+          <input name="company" required maxLength={120} autoComplete="organization" className={FIELD} />
+        </Field>
       </div>
-      <textarea
-        name="note"
-        rows={3}
-        maxLength={1000}
-        aria-label={`${w.note} (${w.optional})`}
-        placeholder={`${w.note} (${w.optional})`}
-        className={cn(FIELD, 'h-auto resize-y py-2.5')}
-      />
+      <Field label={`${w.note} (${w.optional})`}>
+        <textarea name="note" rows={3} maxLength={1000} className={cn(FIELD, 'h-auto resize-y py-2.5')} />
+      </Field>
       {turnstileSiteKey && (
         <>
           <TurnstileCheck key={attempt} siteKey={turnstileSiteKey} onToken={setToken} />
@@ -187,4 +171,14 @@ function TurnstileCheck({ siteKey, onToken }: { siteKey: string; onToken: (token
     }
   }, [siteKey, onToken])
   return <div ref={box} className="min-h-[65px]" />
+}
+
+/** A field with its name shown above it. */
+function Field({ label, className, children }: { label: string; className?: string; children: ReactNode }) {
+  return (
+    <label className={cn('flex min-w-0 flex-col gap-1 text-label text-muted', className)}>
+      <span>{label}</span>
+      {children}
+    </label>
+  )
 }
