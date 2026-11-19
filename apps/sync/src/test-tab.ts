@@ -1,5 +1,6 @@
-// What the sync server's socket tests share: the server on a free port over the test database, and a
-// stand-in tab, a WebSocket that says hello and sends and reads the protocol's JSON.
+// What the sync server's socket tests share: the server on a free port over the test database, a
+// stand-in tab, a WebSocket that says hello and sends and reads the protocol's JSON, and a tab on the
+// sync client, as the editor runs one.
 import type { AddressInfo } from 'node:net'
 import { gunzipSync } from 'node:zlib'
 
@@ -116,8 +117,11 @@ export const typesOf = (tab: TestTab) => tab.heard.map((m) => m.type)
 export async function clientTab(url: string, design: string, token: string) {
   let client: Client | undefined
   let tab: TestTab
+  // Whether the client stops hearing the server, as when its answers are lost on the way.
+  let deaf = false
   const wire = (t: TestTab) => {
     t.onMessage = (message) => {
+      if (deaf) return
       if (!client) {
         if (message.type === 'welcome') client = openClient(message)
         return
@@ -139,8 +143,11 @@ export async function clientTab(url: string, design: string, token: string) {
       for (const change of changes) c.write(change)
       driven.send(c.end('Rename'))
     },
+    /** Stops the client hearing the server until the next reconnect. */
+    deafen: () => (deaf = true),
     async reconnect(to: string) {
       driven.client().disconnect()
+      deaf = false
       tab.close()
       tab = await openTab(to, design)
       wire(tab)
