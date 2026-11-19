@@ -55,9 +55,8 @@
   --grass-lot: #e7e9d2;
   --red: #d2402b;
 
-  /* headings (v2.4): Clash Display, self-hosted from public/fonts (free from fontshare.com, ITF Free Font License).
-     Until that file is in place the headings fall back to the app's Bricolage Grotesque. --serif keeps its old name. */
-  --serif: 'Clash Display', 'Bricolage Grotesque Variable', 'Geist Variable', system-ui, sans-serif;
+  /* headings: Bricolage Grotesque, the app's heading face. --serif keeps its old name. */
+  --serif: 'Bricolage Grotesque Variable', 'Geist Variable', system-ui, sans-serif;
   --font: 'Geist Variable', system-ui, sans-serif;
   --mono: 'Geist Mono Variable', ui-monospace, Menlo, monospace;
   --pixel: var(--mono);

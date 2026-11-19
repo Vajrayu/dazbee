@@ -23,7 +23,7 @@ src/styles/         tokens.css holds every colour, type size and space; one file
 src/scenes/         one file per moving section: the valley hero (a WebGL shader), the routes ring, why, try-out, the city, how, sign-off
 src/content/        the example brief, its routes and the try-out's ready-made concepts
 src/ui/             the phone menu and the pilot form's checks
-public/             served as is: images, sprites, the Clash Display font, favicon, share image
+public/             served as is: images, sprites, favicon, share image
 scripts/            builds the valley images from scripts/valley-source.jpg
 ```
 
