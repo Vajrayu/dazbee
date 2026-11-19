@@ -92,7 +92,11 @@ export function DeleteAccount({
                 ))}
               </ul>
               <div>
-                <button type="button" onClick={close} className={cn(buttonStyles({ variant: 'ghost' }), 'h-9 px-3')}>
+                <button
+                  type="button"
+                  onClick={close}
+                  className={cn(buttonStyles({ variant: 'ghost' }), '-ms-3 h-9 px-3')}
+                >
                   {s.cancel}
                 </button>
               </div>

@@ -212,7 +212,7 @@ export const en = {
       /** What goes: the workspaces they own alone, named as a list. */
       deletesOne: 'Deleting your account also deletes {workspaces}, with every brand, design and file in it.',
       deletesMany: 'Deleting your account also deletes {workspaces}, with every brand, design and file in them.',
-      deletesNone: 'Deleting your account deletes your name, email and settings.',
+      deletesNone: 'No workspace is deleted with your account: it deletes your name, email and settings.',
       othersStay: 'What you made in other workspaces stays with them.',
       typeEmail: 'Type {email} to confirm',
       confirm: 'Delete my account',
