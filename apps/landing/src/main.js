@@ -12,7 +12,7 @@ import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { SplitText } from 'gsap/SplitText'
 import { initValley } from './scenes/valley.js'
-import { orbit } from './scenes/orbit.js'
+import { stadium } from './scenes/stadium.js'
 import { whyScene } from './scenes/why.js'
 import { tryOut } from './scenes/try.js'
 import { town } from './scenes/town.js'
@@ -42,7 +42,7 @@ mm.add({ motion: '(prefers-reduced-motion: no-preference)', still: '(prefers-red
   // the scenes, in page order; each one takes care of itself, and under reduced motion shows its end state
   const scenes = [
     whyScene($('[data-why]'), { still }),
-    orbit($('[data-orbit]'), { still }),
+    stadium($('[data-stadium]'), { still }),
     howScene($('[data-how]'), { still }), // made before the town: pinned sections must be made top to bottom
     town($('[data-town]'), { still }),
     reviewScene($('[data-review]'), { still }),
