@@ -622,10 +622,16 @@
   background: url(/sprites/concert/stadium/sd-barrier.webp) center top / 921.6px 614.4px repeat-x;
   filter: brightness(0.55);
 }
-/* the halo: the ads hang in the air over the stage, lit from inside */
-.sd__ring {
+/* the carousel: a curved wall of cards in the air in front of the stage, seen from its centre */
+.sd__car {
   position: absolute;
   inset: 0;
+}
+.sd__car-in {
+  position: absolute;
+  width: 0;
+  height: 0;
+  transform-style: preserve-3d;
 }
 .sd__card {
   position: absolute;
@@ -639,22 +645,23 @@
   cursor: pointer;
   display: grid;
   justify-items: center;
-  gap: 10px;
+  gap: 12px;
+  backface-visibility: hidden;
   will-change: transform;
 }
 .sd__card .bn {
   width: 100%;
-  border-radius: 12px;
+  border-radius: 16px;
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.18),
-    0 0 30px -6px var(--acc),
-    0 40px 60px -30px rgba(0, 0, 0, 0.9);
+    0 0 0 1px rgba(255, 255, 255, 0.16),
+    0 0 34px -8px var(--acc),
+    0 50px 70px -40px rgba(0, 0, 0, 0.95);
 }
 .sd__card.is-front .bn {
   box-shadow:
     0 0 0 2px color-mix(in srgb, var(--acc) 60%, #fff),
-    0 0 60px 4px color-mix(in srgb, var(--acc) 70%, transparent),
-    0 0 140px 20px color-mix(in srgb, var(--acc) 30%, transparent);
+    0 0 60px 4px color-mix(in srgb, var(--acc) 65%, transparent),
+    0 0 150px 24px color-mix(in srgb, var(--acc) 26%, transparent);
 }
 .sd__card .bn::after {
   content: '';
@@ -672,7 +679,7 @@
   pointer-events: none;
 }
 .sd__card-name {
-  font: 600 15px/1 var(--font);
+  font: 600 17px/1 var(--font);
   color: #aab6c8;
   white-space: nowrap;
   text-shadow: 0 0 12px rgba(0, 0, 0, 0.8);
